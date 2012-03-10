@@ -1,159 +1,216 @@
 package sudokuhelper;
 
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.Point;
 import java.awt.Toolkit;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import javax.swing.JFrame;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Stack;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.border.Border;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.LineBorder;
+import javax.swing.border.MatteBorder;
 
 /**
  * @author Jaroslaw Pawlak
  */
-public class Sudoku extends JFrame implements Constants {
-    private Cell[][] cell;
-    private int cellSelectedRow = N*N / 2;
-    private int cellSelectedColumn = N*N / 2;
-    private int cellErrorRow = N*N / 2;
-    private int cellErrorColumn = N*N / 2;
+public class Sudoku extends JPanel implements Constants {
+    public static final int UP = 1;
+    public static final int DOWN = 2;
+    public static final int LEFT = 3;
+    public static final int RIGHT = 4;
     
-    public Sudoku(boolean poss) {
-        super();
-        cell = Cell.generate(poss);
-        JPanel contentPane = new JPanel(new GridLayout(N*N, N*N));
+    private final Grid grid;
+    private final JLabel[][] label;
+    private final boolean[][] containsValue;
+    
+    private int selectedRow = N*N / 2;
+    private int selectedColumn = N*N / 2;
+    private int errorRow = N*N / 2;
+    private int errorColumn = N*N / 2;
+    
+    public Sudoku() {
+        super(new GridLayout(N*N, N*N));
+        grid = new Grid();
+        label = new JLabel[N*N][N*N];
+        containsValue = new boolean[N*N][N*N];
+        
         for (int i = 0; i < N*N; i++) {
             for (int j = 0; j < N*N; j++) {
-                final int fi = i;
-                final int fj = j;
-                cell[i][j].label().addMouseListener(new MouseAdapter() {
+                label[i][j] = new JLabel();
+                label[i][j].setPreferredSize(new Dimension(50, 50));
+                label[i][j].setOpaque(true);
+                label[i][j].setBackground(new Color(255, 255, 191));
+                label[i][j].setHorizontalAlignment(JLabel.CENTER);
+                if (grid.isEditable(i, j)) {
+                    label[i][j].setFont(FONT_POSS);
+                    label[i][j].setForeground(COLOR_POSS);
+                } else {
+                    label[i][j].setForeground(COLOR_UNEDITABLE);
+                    label[i][j].setFont(FONT_UNEDITABLE);
+                }
+                
+                int top = i > 0 && i % N == 0? 2 : 0;
+                int left = j > 0 && j % N == 0? 2 : 0;
+                label[i][j].setBorder(new CompoundBorder(
+                        new MatteBorder(top, left, 0, 0, Color.black),
+                        new LineBorder(Color.black, 1)));
+                
+                final int fi = i, fj = j;
+                label[i][j].addMouseListener(new MouseAdapter() {
                     @Override
                     public void mousePressed(MouseEvent e) {
                         select(fi, fj);
                     }
                 });
-                cell[i][j].label().setPreferredSize(new Dimension(50, 50));
-                contentPane.add(cell[i][j].label());
+                add(label[i][j]);
             }
         }
-        select(cellSelectedRow, cellSelectedColumn);
         
-        addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                int r = Sudoku.this.cellSelectedRow;
-                int c = Sudoku.this.cellSelectedColumn;
-                int k = e.getKeyCode();
-                if (k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
-                    Sudoku.this.select((r-1+N*N) % (N*N), c);
-                } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
-                    Sudoku.this.select((r+1) % (N*N), c);
-                } else if (k == KeyEvent.VK_LEFT || k == KeyEvent.VK_A) {
-                    Sudoku.this.select(r, (c-1+N*N) % (N*N));
-                } else if (k == KeyEvent.VK_RIGHT || k == KeyEvent.VK_D) {
-                    Sudoku.this.select(r, (c+1) % (N*N));
-                } else if (k == KeyEvent.VK_BACK_SPACE
-                        || k == KeyEvent.VK_DELETE
-                        || k == KeyEvent.VK_Q) {
-                    Sudoku.this.cell[r][c].clear();
-                } else {
-                    int number;
-                    switch (k) {
-                        case KeyEvent.VK_NUMPAD1:
-                        case KeyEvent.VK_1: number = 1; break;
-                        case KeyEvent.VK_NUMPAD2:
-                        case KeyEvent.VK_2: number = 2; break;
-                        case KeyEvent.VK_NUMPAD3:
-                        case KeyEvent.VK_3: number = 3; break;
-                        case KeyEvent.VK_NUMPAD4:
-                        case KeyEvent.VK_4: number = 4; break;
-                        case KeyEvent.VK_NUMPAD5:
-                        case KeyEvent.VK_5: number = 5; break;
-                        case KeyEvent.VK_NUMPAD6:
-                        case KeyEvent.VK_6: number = 6; break;
-                        case KeyEvent.VK_NUMPAD7:
-                        case KeyEvent.VK_7: number = 7; break;
-                        case KeyEvent.VK_NUMPAD8:
-                        case KeyEvent.VK_8: number = 8; break;
-                        case KeyEvent.VK_NUMPAD9:
-                        case KeyEvent.VK_9: number = 9; break;
-                        default: return;
-                    }
-                    if (number <= 0 || number > N*N) {
-                        return;
-                    }
-                    Sudoku.this.removeAutofillColors();
-                    if (Sudoku.this.isAllowed(r, c, number)) {
-                        Sudoku.this.cell[r][c].fill(number, true);
-                    }
-                }
-            }
-        });
+        select(selectedRow, selectedColumn);
+        refresh();
+    }
+    
+    public void select(int direction) {
+        int r = selectedRow;
+        int c = selectedColumn;
         
-        setContentPane(contentPane);
-        pack();
-        setResizable(false);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setVisible(true);
+        if (direction == UP) {
+            select((r-1+N*N) % (N*N), c);
+        } else if (direction == DOWN) {
+            select((r+1) % (N*N), c);
+        } else if (direction == LEFT) {
+            select(r, (c-1+N*N) % (N*N));
+        } else if (direction == RIGHT) {
+            select(r, (c+1) % (N*N));
+        }
     }
     
     private void select(int row, int column) {
-        if (cell[cellErrorRow][cellErrorColumn].value() != 0) {
-            cell[cellErrorRow][cellErrorColumn].label().setForeground(COLOR_NORMAL);
+        if (grid.value(errorRow, errorColumn) != 0) {
+            if (grid.isEditable(errorRow, errorColumn)) {
+                label[errorRow][errorColumn].setForeground(COLOR_NORMAL);
+            } else {
+                label[errorRow][errorColumn].setForeground(COLOR_UNEDITABLE);
+            }
         }
-        cell[cellSelectedRow][cellSelectedColumn].deselect();
-        cellSelectedRow = row;
-        cellSelectedColumn = column;
-        cell[cellSelectedRow][cellSelectedColumn].select();
+        
+        //deselect
+        Border outside = ((CompoundBorder) label[selectedRow][selectedColumn]
+                .getBorder()).getOutsideBorder();
+        label[selectedRow][selectedColumn].setBorder(
+                   new CompoundBorder(outside, new LineBorder(Color.black, 1)));
+        
+        selectedRow = row;
+        selectedColumn = column;
+        
+        //select
+        outside = ((CompoundBorder) label[selectedRow][selectedColumn]
+                .getBorder()).getOutsideBorder();
+        label[row][column].setBorder(
+                   new CompoundBorder(outside, new LineBorder(Color.red, 2)));
     }
-
-    private boolean isAllowed(int row, int column, int number) {
-        if (cell[cellErrorRow][cellErrorColumn].value() != 0) {
-            cell[cellErrorRow][cellErrorColumn]
-                    .label().setForeground(COLOR_NORMAL);
+    
+    public void clearSelected() {
+        if (!grid.isEditable(selectedRow, selectedColumn)) {
+            Toolkit.getDefaultToolkit().beep();
+            return;
         }
-        for (int i = row / N * N; i < row / N * N + N; i++) {
-            for (int j = column / N * N; j < column / N * N + N; j++) {
-                if (i != cellSelectedRow || j != cellSelectedColumn) {
-                    if (cell[i][j].value() == number) {
-                        cell[i][j].label().setForeground(COLOR_ERROR);
-                        cellErrorRow = i;
-                        cellErrorColumn = j;
-                        Toolkit.getDefaultToolkit().beep();
-                        return false;
-                    }
-                }
-            }
-        }
-        for (int i = 0; i < N*N; i++) {
-            if (i != cellSelectedColumn && cell[row][i].value() == number) {
-                cell[row][i].label().setForeground(COLOR_ERROR);
-                cellErrorRow = row;
-                cellErrorColumn = i;
-                Toolkit.getDefaultToolkit().beep();
-                return false;
-            }
-            
-            if (i != cellSelectedRow && cell[i][column].value() == number) {
-                cell[i][column].label().setForeground(COLOR_ERROR);
-                cellErrorRow = i;
-                cellErrorColumn = column;
-                Toolkit.getDefaultToolkit().beep();
-                return false;
-            }
-        }
-        return true;
+        grid.clear(selectedRow, selectedColumn);
+        containsValue[selectedRow][selectedColumn] = false;
+        label[selectedRow][selectedColumn].setText(
+                getPossibilities(grid.poss(selectedRow, selectedColumn)));
+        label[selectedRow][selectedColumn].setForeground(COLOR_POSS);
+        label[selectedRow][selectedColumn].setFont(FONT_POSS);
     }
-
-    private void removeAutofillColors() {
+    
+    public void fillSelected(int number) {
+        containsValue[selectedRow][selectedColumn] = true;
+        grid.fill(selectedRow, selectedColumn, number);
+        label[selectedRow][selectedColumn].setText(
+                "" + grid.value(selectedRow, selectedColumn));
+        label[selectedRow][selectedColumn].setForeground(COLOR_NORMAL);
+        label[selectedRow][selectedColumn].setFont(FONT_NORMAL);
         for (int i = 0; i < N*N; i++) {
             for (int j = 0; j < N*N; j++) {
-                if (cell[i][j].value() != 0) {
-                    cell[i][j].label().setForeground(COLOR_NORMAL);
+                if (grid.value(i, j) != 0) {
+                    if (!containsValue[i][j]) {
+                        containsValue[i][j] = true;
+                        label[i][j].setText("" + grid.value(i, j));
+                        label[i][j].setForeground(COLOR_AUTOFILL);
+                        label[i][j].setFont(FONT_NORMAL);
+                    } 
+                } else {
+                    label[i][j].setText(getPossibilities(grid.poss(i, j)));
                 }
             }
         }
+    }
+    
+    public final void refresh() {
+        for (int i = 0; i < N*N; i++) {
+            for (int j = 0; j < N*N; j++) {
+                if (grid.value(i, j) == 0) {
+                    if (!grid.isEditable(i, j)) {
+                        System.err.println("uneditable empty cell, i = "
+                                + i + ", j = " + j);
+                    }
+                    label[i][j].setFont(FONT_POSS);
+                    label[i][j].setForeground(COLOR_POSS);
+                    label[i][j].setText(getPossibilities(grid.poss(i, j)));
+                } else {
+                    if (grid.isEditable(i, j)) {
+                        label[i][j].setFont(FONT_NORMAL);
+                        label[i][j].setForeground(COLOR_NORMAL);
+                    } else {
+                        label[i][j].setFont(FONT_UNEDITABLE);
+                        label[i][j].setForeground(COLOR_UNEDITABLE);
+                    }
+                    label[i][j].setText("" + grid.value(i, j));
+                }
+            }
+        }
+    }
+    
+    public boolean isAllowed(int number) {
+        Point p = grid.isAllowed(selectedRow, selectedColumn, number);
+        if (p == null) {
+            return true;
+        } else {
+            if (grid.value(errorRow, errorColumn) != 0) {
+                label[errorRow][errorColumn].setForeground(COLOR_NORMAL);
+            }
+            label[errorRow = p.x][errorColumn = p.y].setForeground(COLOR_ERROR);
+            Toolkit.getDefaultToolkit().beep();
+            return false;
+        }
+    }
+    
+    
+    
+    private static String getPossibilities(Poss poss) {
+        String r = "";
+        String line = "";
+        for (int i = 1; i <= N*N; i++) {
+            line += "<td>" + (poss.contains(i)? i : "&nbsp") + "</td>";
+            if (i % N == 0) {
+                if (TEMPORARY_POSS_AS_NUMERICAL_KEYBOARD) {
+                    r = "</tr><tr>" + line + r;
+                } else {
+                    r += "</tr><tr>" + line;
+                }
+                line = "";
+            }
+        }
+        r = "<html><table><tr>"
+                + r.substring("</tr><tr>".length())
+                + "</tr></table></html>";
+        return r;
     }
 }
