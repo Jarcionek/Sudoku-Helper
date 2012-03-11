@@ -2,18 +2,55 @@ package sudokuhelper;
 
 import java.awt.Point;
 import java.util.Iterator;
+import java.util.Random;
 
 /**
  * @author Jaroslaw Pawlak
  */
-public class Grid implements Constants {
-    private Cell[][] grid;
+public class Grid {
+    private final Cell[][] grid;
+    private final int size;
+    
+    boolean autoAddPoss = true;
+    boolean autoRemovePoss = true;
+    boolean autoFillBasic = true;
+    boolean autoFillAdvanced = true;
 
-    public Grid() {
-        grid = new Cell[N*N][N*N];
-        for (int i = 0; i < N*N; i++) {
-            for (int j = 0; j < N*N; j++) {
-                grid[i][j] = new Cell(i, j, true, true);
+    public Grid(boolean autoAddPoss, boolean autoRemovePoss,
+            boolean autoFillBasic, boolean autoFillAdvanced,
+            boolean initialPoss, int initNumbers, int size) {
+        this.autoAddPoss = autoAddPoss;
+        this.autoRemovePoss = autoRemovePoss;
+        this.autoFillBasic = autoFillBasic;
+        this.autoFillAdvanced = autoFillAdvanced;
+        this.size = size;
+        
+        grid = new Cell[size*size][size*size];
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                grid[i][j] = new Cell(i, j, initialPoss, true, size);
+            }
+        }
+        int i = initNumbers;
+        Random r = new Random();
+        int x, y, number;
+        while (i > 0) {
+            x = r.nextInt(size*size);
+            y = r.nextInt(size*size);
+            number = r.nextInt(size*size);
+            if ((grid[x][y].value() == 0) && (null == isAllowed(x, y, number))) {
+                grid[x][y].setEditable(false);
+                grid[x][y].fill(number);
+                i--;
+            }
+        }
+        if (autoRemovePoss) {
+            for (Cell cell : all()) {
+                for (Cell neighbour : neighbours(cell.row, cell.column, false)) {
+                    if (neighbour.value() != 0) {
+                        cell.poss().remove(neighbour.value());
+                    }
+                }
             }
         }
     }
@@ -23,7 +60,7 @@ public class Grid implements Constants {
     }
     
     public Poss poss(int row, int column) {
-        return grid[row][column].poss().copy();
+        return grid[row][column].poss();
     }
     
     public boolean isEditable(int row, int column) {
@@ -36,7 +73,7 @@ public class Grid implements Constants {
         }
         int number = grid[row][column].clear();
         
-        if (TEMPORARY_AUTOFILL_SUGGESTIONS) { //FIXME
+        if (autoAddPoss) { //FIXME
             //adding to poss may break autofill because removed number
             //should not be added to all of the neighbours
             //depending on solving algorithm
@@ -49,7 +86,7 @@ public class Grid implements Constants {
         }
     }
     
-    public Point isAllowed(int row, int column, int number) {
+    public final Point isAllowed(int row, int column, int number) {
         for (Cell neighbour : neighbours(row, column, false)) {
             if (neighbour.value() == number) {
                 return new Point(neighbour.row, neighbour.column);
@@ -68,35 +105,48 @@ public class Grid implements Constants {
     }
     
     public void fill(int row, int column, int number) {
+        if (!grid[row][column].isEditable()) {
+            return;
+        }
         if (grid[row][column].value() != 0) {
             clear(row, column);
         }
         grid[row][column].fill(number);
         
-        if (TEMPORARY_AUTOFILL_SUGGESTIONS) {
-            for (Cell cell : neighbours(row, column, true)) {
-                cell.poss().remove(number);
-            }
-        }
+//        if (autoRemovePoss) {
+//            for (Cell cell : neighbours(row, column, true)) {
+//                cell.poss().remove(number);
+//            }
+//        }
         
         fillAll();
     }
     
     private void fillAll() {
-        if (TEMPORARY_AUTOFILL_LEVEL <= 0) {
-            return;
-        }
-        
-        if (TEMPORARY_AUTOFILL_LEVEL >= 1) {
+        if (autoRemovePoss) {
             for (Cell cell : all()) {
-                if (cell.poss().size() == 1 && cell.value() == 0) {
-                    fill(cell.row, cell.column, cell.poss().get());
-                    return;
+                for (int n : cell.poss()) {
+                    if (!isAllowed(cell, n)) {
+                        cell.poss().remove(n);
+                    }
                 }
             }
         }
         
-        if (TEMPORARY_AUTOFILL_LEVEL >= 2) {
+        if (autoFillBasic) {
+            for (Cell cell : all()) {
+                if (cell.value() == 0) {
+                    if (cell.poss().size() == 1) {
+                        if (isAllowed(cell, cell.poss().get())) {
+                            fill(cell.row, cell.column, cell.poss().get());
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (autoFillAdvanced) {
             for (Cell cell : all()) {
                 if (cell.value() != 0) {
                     continue;
@@ -110,8 +160,10 @@ public class Grid implements Constants {
                         }
                     }
                     if (!possibleSomewhereElse) {
-                        fill(cell.row, cell.column, n);
-                        return;
+                        if (isAllowed(cell, cell.poss().get())) {
+                            fill(cell.row, cell.column, n);
+                            return;
+                        }
                     }
                     possibleSomewhereElse = false;
                     for (Cell otherCell : column(cell.row, cell.column, false)) {
@@ -121,8 +173,10 @@ public class Grid implements Constants {
                         }
                     }
                     if (!possibleSomewhereElse) {
-                        fill(cell.row, cell.column, n);
-                        return;
+                        if (isAllowed(cell, cell.poss().get())) {
+                            fill(cell.row, cell.column, n);
+                            return;
+                        }
                     }
                     possibleSomewhereElse = false;
                     for (Cell otherCell : square(cell.row, cell.column, false)) {
@@ -132,8 +186,10 @@ public class Grid implements Constants {
                         }
                     }
                     if (!possibleSomewhereElse) {
-                        fill(cell.row, cell.column, n);
-                        return;
+                        if (isAllowed(cell, cell.poss().get())) {
+                            fill(cell.row, cell.column, n);
+                            return;
+                        }
                     }
                 }
             }
@@ -214,7 +270,7 @@ public class Grid implements Constants {
             if (!inc && i == row && j == column) {
                 increase();
             }
-            return i < N*N && j < N*N;
+            return i < size*size && j < size*size;
         }
 
         @Override
@@ -229,7 +285,7 @@ public class Grid implements Constants {
         
         protected void increase() {
             j++;
-            if (j == N*N) {
+            if (j == size*size) {
                 j = 0;
                 i++;
             }
@@ -246,15 +302,15 @@ public class Grid implements Constants {
         @Override
         public boolean hasNext() {
             while (super.hasNext()) {
-                if (column / N * N <= j && j < column / N * N + N
-                        && row / N * N <= i && i < row / N * N + N) {
+                if (column / size * size <= j && j < column / size * size + size
+                        && row / size * size <= i && i < row / size * size + size) {
                     return true; //square
                 }
-                if (i == row && (j < column / N * N || column / N * N + N <= j)) {
+                if (i == row && (j < column / size * size || column / size * size + size <= j)) {
                     return true; //column not in square
                     
                 }
-                if (j == column && (i < row / N * N || row / N * N + N <= i)) {
+                if (j == column && (i < row / size * size || row / size * size + size <= i)) {
                     return true; //row not in square
                 }
                 increase();
@@ -270,20 +326,20 @@ public class Grid implements Constants {
     private class ItrSqr extends ItrAll {
         public ItrSqr(int row, int column, boolean inc) {
             super(row, column, inc);
-            i = row / N * N;
-            j = column / N * N;
+            i = row / size * size;
+            j = column / size * size;
         }
         
         @Override
         public boolean hasNext() {
-            return super.hasNext() && i < row / N * N + N && j < column / N * N + N;
+            return super.hasNext() && i < row / size * size + size && j < column / size * size + size;
         }
         
         @Override
         protected void increase() {
             j++;
-            if (j == column / N * N + N) {
-                j = column / N * N;
+            if (j == column / size * size + size) {
+                j = column / size * size;
                 i++;
             }
         }

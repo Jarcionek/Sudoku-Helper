@@ -5,10 +5,11 @@ import java.util.Iterator;
 /**
  * @author Jaroslaw Pawlak
  */
-public class Poss implements Constants, Iterable<Integer> {
-    private boolean[] poss = new boolean[N*N];
+public class Poss implements Iterable<Integer> {
+    private boolean[] poss;
 
-    public Poss(boolean initValue) {
+    public Poss(boolean initValue, int size) {
+        poss = new boolean[size*size];
         for (int i = 0; i < poss.length; i++) {
             poss[i] = initValue;
         }
@@ -44,6 +45,14 @@ public class Poss implements Constants, Iterable<Integer> {
     public boolean contains(int n) {
         return poss[--n];
     }
+
+    public Poss copy() {
+        Poss r = new Poss(false, poss.length);
+        for (int n : this) {
+            r.poss[n - 1] = true;
+        }
+        return r;
+    }
     
     @Override
     public String toString() {
@@ -74,10 +83,8 @@ public class Poss implements Constants, Iterable<Integer> {
                 while (!poss[last++]) {}
                 return last;
             }
-
             @Override
             public void remove() {}
         };
     }
-    
 }
