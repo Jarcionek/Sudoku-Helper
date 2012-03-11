@@ -5,12 +5,10 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.Border;
@@ -54,7 +52,7 @@ public class Sudoku extends JPanel {
     public Sudoku(boolean autoAddPoss, boolean autoRemovePoss,
             boolean autoFillBasic, boolean autoFillAdvanced,
             boolean possAsNum, boolean initialPoss,
-            int initNumbers, int size, final Method m) {
+            int initNumbers, int size, final MouseListenerMethod m) {
         super(new GridBagLayout());
         this.size = size;
         this.selectedRow = size*size / 2;
@@ -62,7 +60,7 @@ public class Sudoku extends JPanel {
         this.errorRow = size*size / 2;
         this.errorColumn = size*size / 2;
         this.possAsNum = possAsNum;
-        this.grid = new Grid(autoAddPoss, autoRemovePoss, autoFillBasic,
+        this.grid = Grid.generate(autoAddPoss, autoRemovePoss, autoFillBasic,
                 autoFillAdvanced, initialPoss, initNumbers, size);
         this.label = new JLabel[size*size][size*size];
         this.containsValue = new boolean[size*size][size*size];
@@ -94,7 +92,7 @@ public class Sudoku extends JPanel {
                     @Override
                     public void mousePressed(MouseEvent e) {
                         select(fi, fj);
-                        m.exec();
+                        m.exec(e);
                     }
                 });
                 c.gridx = j;
@@ -122,6 +120,10 @@ public class Sudoku extends JPanel {
     }
     
     public void possChange(int number) {
+        if (!grid.isEditable(selectedRow, selectedColumn)) {
+            Toolkit.getDefaultToolkit().beep();
+            return;
+        }
         Poss poss = grid.poss(selectedRow, selectedColumn);
         if (poss.contains(number)) {
             poss.remove(number);
@@ -181,17 +183,9 @@ public class Sudoku extends JPanel {
         grid.clear(selectedRow, selectedColumn);
         containsValue[selectedRow][selectedColumn] = false;
         refresh();
-//        label[selectedRow][selectedColumn].setText(
-//                getPossibilities(grid.poss(selectedRow, selectedColumn)));
-//        label[selectedRow][selectedColumn].setForeground(COLOR_POSS);
-//        label[selectedRow][selectedColumn].setFont(FONT_POSS);
     }
     
     public void fillSelected(int number) {
-//        if (!grid.isEditable(selectedRow, selectedColumn)) {
-//            Toolkit.getDefaultToolkit().beep();
-//            return;
-//        }
         containsValue[selectedRow][selectedColumn] = true;
         grid.fill(selectedRow, selectedColumn, number);
         label[selectedRow][selectedColumn].setText(
@@ -276,6 +270,15 @@ public class Sudoku extends JPanel {
     
     public void setPossAsNum(boolean c) {
         possAsNum = c;
+    }
+    
+    public void reset() {
+        grid.reset();
+        refresh();
+    }
+    
+    public boolean isPuzzleValid() {
+        return Grid.isSolvable(grid.copy());
     }
     
     public String getSelectedPoss() {

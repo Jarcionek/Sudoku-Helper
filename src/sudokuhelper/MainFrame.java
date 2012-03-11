@@ -8,6 +8,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.Hashtable;
 import javax.swing.Box;
 import javax.swing.JCheckBox;
@@ -26,9 +29,9 @@ import javax.swing.event.ChangeListener;
  * @author Jaroslaw Pawlak
  */
 public class MainFrame extends JFrame {
-    private final Method m = new Method() {
+    private final MouseListenerMethod m = new MouseListenerMethod() {
         @Override
-        public void exec() {
+        public void exec(MouseEvent e) {
             number = 0;
             typeLabel.setText("");
             possLabel.setText(sudoku.getSelectedPoss());
@@ -67,11 +70,47 @@ public class MainFrame extends JFrame {
             }
         });
         
+        JMenuItem validateMenuItem = new JMenuItem("Validate");
+        validateMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String msg = "<html><font size=8 color=";
+                long start = System.currentTimeMillis();
+                if (sudoku.isPuzzleValid()) {
+                    msg += "green>Puzzle is valid";
+                } else {
+                    //FIXME remove it after fixing solving algorithm
+                    if (System.currentTimeMillis() - start > 5000) {
+                        msg = "<html><font size=4 color=orange>";
+                        msg += "Algorithm was unable to validate this<br>";
+                        msg += "puzzle in less than 5 seconds.<br>";
+                        msg += "It's highly probable that puzzle is invalid.";
+                    } else {
+                        msg += "red>Puzzle is invalid";
+                    }
+                }
+                msg += "</font></html>";
+                JOptionPane.showMessageDialog(MainFrame.this, msg,
+                        MainFrame.this.getTitle(), JOptionPane.PLAIN_MESSAGE);
+            }
+        });
+        
+        JMenuItem resetMenuItem = new JMenuItem("Reset");
+        resetMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sudoku.reset();
+                number = 0;
+                typeLabel.setText("");
+                possLabel.setText(sudoku.getSelectedPoss());
+            }
+        });
+        
         JMenuItem exitMenuItem = new JMenuItem("Exit");
         exitMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                System.exit(0);
+                exit();
             }
         });
         
@@ -170,6 +209,8 @@ public class MainFrame extends JFrame {
         setJMenuBar(menuBar);
             menuBar.add(sudokuMenu);
                 sudokuMenu.add(newMenuItem);
+                sudokuMenu.add(validateMenuItem);
+                sudokuMenu.add(resetMenuItem);
                 sudokuMenu.add(exitMenuItem);
             menuBar.add(settingsMenu);
                 settingsMenu.add(autosolvingMenu);
@@ -192,8 +233,9 @@ public class MainFrame extends JFrame {
         boolean autoFillAdvanced = autoFillSlider.getValue() >= 2;
                     
         sudoku = new Sudoku(autoAddPoss, autoRemovePoss, autoFillBasic,
-                autoFillAdvanced, possAsNumC.isSelected(), true, 0, 3, m);
+                autoFillAdvanced, possAsNumC.isSelected(), false, 15, 3, m);
         setContentPane(sudoku);
+        possLabel.setText(sudoku.getSelectedPoss());
         
         addKeyListener(new KeyAdapter() {
             @Override
@@ -273,6 +315,7 @@ public class MainFrame extends JFrame {
                 sudoku.refresh();
                 if (possMode) {
                     sudoku.possChange(n);
+                    possLabel.setText(sudoku.getSelectedPoss());
                 } else {
                     if (sudoku.isAllowed(n)) {
                         sudoku.fillSelected(n);
@@ -281,10 +324,28 @@ public class MainFrame extends JFrame {
             }
         });
         
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                exit();
+            }
+        });
+        
         pack();
         setResizable(false);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setVisible(true);
+    }
+    
+    private void exit() {
+        int choice = JOptionPane.showConfirmDialog(this,
+                "Do you really want to quit?",
+                this.getTitle(),
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        if (choice == JOptionPane.YES_OPTION) {
+            System.exit(0);
+        }
     }
     
     private void newSudoku() {
@@ -331,7 +392,7 @@ public class MainFrame extends JFrame {
         private JLabel initialNumbersLabel = new JLabel("Numbers filled");
         private JSlider initialNumbersSlider = new JSlider(0, max(X), 0);
         private JLabel fillPossLabel = new JLabel("Fill suggestions");
-        private JCheckBox fillPossCheckBox = new JCheckBox();
+        private JCheckBox fillPossCheckBox = new JCheckBox("", true);
         
         public newSudokuChoicePanel() {
             super(new GridBagLayout());

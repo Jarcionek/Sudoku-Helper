@@ -14,3 +14,8 @@ public class Main {
         new MainFrame();
     }
 }
+
+/** //TODO
+ * history + undo in Grid
+ * auto last game save/load
+ */

@@ -44,11 +44,18 @@ public class Cell {
     public void fill(int number) {
         value = number;
     }
+    
+    public Cell copy() {
+        Cell r = new Cell(row, column, false, editable, 0);
+        r.poss = this.poss.copy();
+        r.value = this.value;
+        return r;
+    }
 
     @Override
     public String toString() {
         return this.getClass() + "(editable=" + editable + ",value=" + value
                 + ",row=" + row + ",column=" + column + ",poss=" + poss + ")";
     }
-    
+        
 }

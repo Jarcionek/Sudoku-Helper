@@ -16,11 +16,11 @@ public class Poss implements Iterable<Integer> {
     }
     
     public void add(int n) {
-        poss[--n] = true;
+        poss[n-1] = true;
     }
     
     public void remove(int n) {
-        poss[--n] = false;
+        poss[n-1] = false;
     }
     
     public int size() {
@@ -43,11 +43,23 @@ public class Poss implements Iterable<Integer> {
     }
     
     public boolean contains(int n) {
-        return poss[--n];
+        return poss[n-1];
+    }
+    
+    public void addAll() {
+        for (int i = 0; i < poss.length; i++) {
+            poss[i] = true;
+        }
+    }
+    
+    public void clear() {
+        for (int n : this) {
+            this.remove(n);
+        }
     }
 
     public Poss copy() {
-        Poss r = new Poss(false, poss.length);
+        Poss r = new Poss(false, (int) Math.round(Math.sqrt(poss.length)));
         for (int n : this) {
             r.poss[n - 1] = true;
         }
