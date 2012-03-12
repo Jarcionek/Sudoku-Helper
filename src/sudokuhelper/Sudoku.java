@@ -49,9 +49,8 @@ public class Sudoku extends JPanel {
     private boolean possAsNum;
     private Color selectionColor = SELECTION_COLOR_NORMAL;
     
-    public Sudoku(boolean autoAddPoss, boolean autoRemovePoss,
-            boolean autoFillBasic, boolean autoFillAdvanced,
-            boolean possAsNum, boolean initialPoss,
+    public Sudoku(boolean autoRemovePoss, boolean autoFillBasic,
+            boolean autoFillAdvanced, boolean possAsNum, boolean initialPoss,
             int initNumbers, int size, final MouseListenerMethod m) {
         super(new GridBagLayout());
         this.size = size;
@@ -60,7 +59,7 @@ public class Sudoku extends JPanel {
         this.errorRow = size*size / 2;
         this.errorColumn = size*size / 2;
         this.possAsNum = possAsNum;
-        this.grid = Grid.generate(autoAddPoss, autoRemovePoss, autoFillBasic,
+        this.grid = Grid.generate(autoRemovePoss, autoFillBasic,
                 autoFillAdvanced, initialPoss, initNumbers, size);
         this.label = new JLabel[size*size][size*size];
         this.containsValue = new boolean[size*size][size*size];
@@ -110,6 +109,35 @@ public class Sudoku extends JPanel {
         return size;
     }
     
+    public void undo() {
+        if (grid.undo()) {
+            for (int i = 0; i < size*size; i++) {
+                for (int j = 0; j < size*size; j++) {
+                    containsValue[i][j] = grid.value(i, j) != 0;
+                }
+            }
+            refresh();
+        } else {
+            Toolkit.getDefaultToolkit().beep();
+        }
+    }
+    
+    public boolean solve() {
+        boolean r = grid.solve();
+        if (r) {
+            for (int i = 0; i < size*size; i++) {
+                for (int j = 0; j < size*size; j++) {
+                    if (!containsValue[i][j]) {
+                        label[i][j].setFont(FONT_NORMAL);
+                        label[i][j].setForeground(COLOR_AUTOFILL);
+                        label[i][j].setText("" + grid.value(i, j));
+                    }
+                }
+            }
+        }
+        return r;
+    }
+    
     public void setPossMode(boolean c) {
         selectionColor = c? SELECTION_COLOR_POSS : SELECTION_COLOR_NORMAL;
         //select
@@ -124,14 +152,14 @@ public class Sudoku extends JPanel {
             Toolkit.getDefaultToolkit().beep();
             return;
         }
-        Poss poss = grid.poss(selectedRow, selectedColumn);
-        if (poss.contains(number)) {
-            poss.remove(number);
+        if (grid.possContains(selectedRow, selectedColumn, number)) {
+            grid.possRemove(selectedRow, selectedColumn, number);
         } else {
-            poss.add(number);
+            grid.possAdd(selectedRow, selectedColumn, number);
         }
         if (grid.value(selectedRow, selectedColumn) == 0) {
-            label[selectedRow][selectedColumn].setText(getPossibilities(poss));
+            label[selectedRow][selectedColumn].setText(
+                    getPossibilities(grid.poss(selectedRow, selectedColumn)));
         }
     }
     
@@ -151,13 +179,14 @@ public class Sudoku extends JPanel {
     }
     
     private void select(int row, int column) {
-        if (grid.value(errorRow, errorColumn) != 0) {
-            if (grid.isEditable(errorRow, errorColumn)) {
-                label[errorRow][errorColumn].setForeground(COLOR_NORMAL);
-            } else {
-                label[errorRow][errorColumn].setForeground(COLOR_UNEDITABLE);
-            }
-        }
+        refresh(errorRow, errorColumn);
+//        if (grid.value(errorRow, errorColumn) != 0) {
+//            if (grid.isEditable(errorRow, errorColumn)) {
+//                label[errorRow][errorColumn].setForeground(COLOR_NORMAL);
+//            } else {
+//                label[errorRow][errorColumn].setForeground(COLOR_UNEDITABLE);
+//            }
+//        }
         
         //deselect
         Border outside = ((CompoundBorder) label[selectedRow][selectedColumn]
@@ -186,6 +215,9 @@ public class Sudoku extends JPanel {
     }
     
     public void fillSelected(int number) {
+        if (grid.value(selectedRow, selectedColumn) == number) {
+            return;
+        }
         containsValue[selectedRow][selectedColumn] = true;
         grid.fill(selectedRow, selectedColumn, number);
         label[selectedRow][selectedColumn].setText(
@@ -208,27 +240,31 @@ public class Sudoku extends JPanel {
         }
     }
     
+    public void refresh(int row, int column) {
+        if (grid.value(row, column) == 0) {
+            if (!grid.isEditable(row, column)) {
+                System.err.println("uneditable empty cell, i = "
+                        + row + ", j = " + column);
+            }
+            label[row][column].setFont(FONT_POSS);
+            label[row][column].setForeground(COLOR_POSS);
+            label[row][column].setText(getPossibilities(grid.poss(row, column)));
+        } else {
+            if (grid.isEditable(row, column)) {
+                label[row][column].setFont(FONT_NORMAL);
+                label[row][column].setForeground(COLOR_NORMAL);
+            } else {
+                label[row][column].setFont(FONT_UNEDITABLE);
+                label[row][column].setForeground(COLOR_UNEDITABLE);
+            }
+            label[row][column].setText("" + grid.value(row, column));
+        }
+    }
+    
     public final void refresh() {
         for (int i = 0; i < size*size; i++) {
             for (int j = 0; j < size*size; j++) {
-                if (grid.value(i, j) == 0) {
-                    if (!grid.isEditable(i, j)) {
-                        System.err.println("uneditable empty cell, i = "
-                                + i + ", j = " + j);
-                    }
-                    label[i][j].setFont(FONT_POSS);
-                    label[i][j].setForeground(COLOR_POSS);
-                    label[i][j].setText(getPossibilities(grid.poss(i, j)));
-                } else {
-                    if (grid.isEditable(i, j)) {
-                        label[i][j].setFont(FONT_NORMAL);
-                        label[i][j].setForeground(COLOR_NORMAL);
-                    } else {
-                        label[i][j].setFont(FONT_UNEDITABLE);
-                        label[i][j].setForeground(COLOR_UNEDITABLE);
-                    }
-                    label[i][j].setText("" + grid.value(i, j));
-                }
+                refresh(i, j);
             }
         }
     }
@@ -250,10 +286,6 @@ public class Sudoku extends JPanel {
             Toolkit.getDefaultToolkit().beep();
             return false;
         }
-    }
-    
-    public void setAutoAddPoss(boolean c) {
-        grid.autoAddPoss = c;
     }
     
     public void setAutoRemovePoss(boolean c) {
