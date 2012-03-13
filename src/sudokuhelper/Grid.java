@@ -4,6 +4,7 @@ import java.awt.Point;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.Stack;
+import javax.swing.JOptionPane;
 
 /**
  * @author Jaroslaw Pawlak
@@ -12,6 +13,10 @@ public class Grid {
     private static Grid solved = null;
     //FIXME improve solving algorithm and remove this:
     private static long temporarySolving = -1;
+    public static final int TEMP_TIME_OUT = 5000;
+    public static final int VALID = 1;
+    public static final int INVALID = 2;
+    public static final int UNKNOWN = 3;
     
     private final Cell[][] grid;
     private final int size;
@@ -66,8 +71,17 @@ public class Grid {
                 }
             }
             
-            if (!isSolvable(g.copy())) {
+            int status = isSolvable(g.copy());
+            if (status == INVALID) {
                 continue;
+            } else if (status == UNKNOWN) {
+                String msg = "<html><font size=4 color=orange>";
+                msg += "Algorithm was not able<br>";
+                msg += "to validate this puzzle.<br>";
+                msg += "It may not have a solution.";
+                msg += "</font></html>";
+                JOptionPane.showMessageDialog(null, msg,
+                        "Sudoku Helper", JOptionPane.WARNING_MESSAGE);
             }
             
             if (autoRemovePoss) {
@@ -105,9 +119,10 @@ public class Grid {
         }
     }
     
-    public boolean solve() {
-        if (isSolvable(this.copy())) {
-            history.add(new Change(-1, -1, -1, -1, true)); //just a marker
+    public int solve() {
+        int status = isSolvable(this.copy());
+        if (status == VALID) {
+            history.add(Change.marker());
             for (int i = 0; i < size*size; i++) {
                 for (int j = 0; j < size*size; j++) {
                     if (grid[i][j].value() == 0) {
@@ -116,9 +131,8 @@ public class Grid {
                     }
                 }
             }
-            return true;
         }
-        return false;
+        return status;
     }
     
     public void reset() {
@@ -205,6 +219,28 @@ public class Grid {
         return true;
     }
     
+    public void fillSuggestions() {
+        history.add(Change.marker());
+        for (Cell cell : all()) {
+            for (int n = 1; n <= size*size; n++) {
+                if (!cell.poss().contains(n)) {
+                    history.add(new Change(cell.row, cell.column, n,
+                            Change.POSS_REM, false));
+                    cell.poss().add(n);
+                }
+            }
+        }
+        for (Cell cell : all()) {
+            for (int n : cell.poss()) {
+                if (!isAllowed(cell, n)) {
+                    history.add(new Change(cell.row, cell.column, n,
+                            Change.POSS_ADD, false));
+                    cell.poss().remove(n);
+                }
+            }
+        }
+    }
+    
     public void fill(int row, int column, int number) {
         fill(row, column, number, true);
     }
@@ -214,12 +250,12 @@ public class Grid {
             return;
         }
         history.add(new Change(row, column, grid[row][column].value(), Change.NORMAL, user));
-        if (user && autoRemovePoss) {
-            for (int n : grid[row][column].poss()) {
-                history.add(new Change(row, column, n, Change.POSS_ADD, false));
-                grid[row][column].poss().remove(n);
-            }
-        }
+//        if (user && autoRemovePoss) {
+//            for (int n : grid[row][column].poss()) {
+//                history.add(new Change(row, column, n, Change.POSS_ADD, false));
+//                grid[row][column].poss().remove(n);
+//            }
+//        }
         if (grid[row][column].value() != 0) {
             clear(row, column, user);
         }
@@ -243,12 +279,13 @@ public class Grid {
         
         if (autoFillBasic) {
             for (Cell cell : all()) {
-                if (cell.value() == 0) {
-                    if (cell.poss().size() == 1) {
-                        if (isAllowed(cell, cell.poss().get())) {
-                            fill(cell.row, cell.column, cell.poss().get(), false);
-                            return;
-                        }
+                if (cell.value() != 0) {
+                    continue;
+                }
+                if (cell.poss().size() == 1) {
+                    if (isAllowed(cell, cell.poss().get())) {
+                        fill(cell.row, cell.column, cell.poss().get(), false);
+                        return;
                     }
                 }
             }
@@ -382,7 +419,7 @@ public class Grid {
         return r;
     }
     
-    private boolean isAllFilled() {
+    public boolean isAllFilled() {
         for (Cell cell : all()) {
             if (cell.value() == 0) {
                 return false;
@@ -393,12 +430,11 @@ public class Grid {
     
     
     
-    public static boolean isSolvable(Grid gridCopy) {
-        if (temporarySolving < 0) {
+    public static int isSolvable(Grid gridCopy) {
+        if (temporarySolving == -1) {
             temporarySolving = System.currentTimeMillis();
-        } else if (System.currentTimeMillis() - temporarySolving > 5000) {
-            temporarySolving = -2;
-            return false;
+        } else if (System.currentTimeMillis() - temporarySolving > TEMP_TIME_OUT) {
+            return UNKNOWN;
         }
         if (!gridCopy.initialPoss) {
             gridCopy.initialPoss = true;
@@ -416,7 +452,7 @@ public class Grid {
         if (gridCopy.isAllFilled()) {
             temporarySolving = -1;
             solved = gridCopy;
-            return true;
+            return VALID;
         }
         
         Point p = new Point(-1, -1);
@@ -424,7 +460,7 @@ public class Grid {
             for (int j = 0; j < gridCopy.size*gridCopy.size; j++) {
                 if (gridCopy.grid[i][j].value() == 0) {
                     if (gridCopy.grid[i][j].poss().size() == 0) {
-                        return false;
+                        return INVALID;
                     } else if (p.x == -1 || gridCopy.grid[i][j].poss().size()
                             < gridCopy.grid[p.x][p.y].poss().size()) {
                         p.x = i;
@@ -437,15 +473,14 @@ public class Grid {
         for (int n : gridCopy.grid[p.x][p.y].poss()) {
             Grid anotherCopy = gridCopy.copy();
             anotherCopy.grid[p.x][p.y].fill(n);
-            if (isSolvable(anotherCopy)) {
+            int status = isSolvable(anotherCopy);
+            if (status == VALID || status == UNKNOWN) {
                 temporarySolving = -1;
-                return true;
-            }
-            if (temporarySolving == -2) {
-                return false;
+                return status;
             }
         }
-        return false;
+        temporarySolving = -1;
+        return INVALID;
     }
     
     

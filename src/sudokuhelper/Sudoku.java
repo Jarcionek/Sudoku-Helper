@@ -13,6 +13,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.border.MatteBorder;
 
@@ -84,7 +85,8 @@ public class Sudoku extends JPanel {
                 int left = j > 0 && j % size == 0? 2 : 0;
                 label[i][j].setBorder(new CompoundBorder(
                         new MatteBorder(top, left, 0, 0, Color.black),
-                        new LineBorder(Color.black, 1)));
+                                new CompoundBorder(new LineBorder(Color.black, 1),
+                                                   new EmptyBorder(1, 1, 1, 1))));
                 
                 final int fi = i, fj = j;
                 label[i][j].addMouseListener(new MouseAdapter() {
@@ -122,12 +124,13 @@ public class Sudoku extends JPanel {
         }
     }
     
-    public boolean solve() {
-        boolean r = grid.solve();
-        if (r) {
+    public int solve() {
+        int status = grid.solve();
+        if (status == Grid.VALID) {
             for (int i = 0; i < size*size; i++) {
                 for (int j = 0; j < size*size; j++) {
                     if (!containsValue[i][j]) {
+                        containsValue[i][j] = true;
                         label[i][j].setFont(FONT_NORMAL);
                         label[i][j].setForeground(COLOR_AUTOFILL);
                         label[i][j].setText("" + grid.value(i, j));
@@ -135,7 +138,7 @@ public class Sudoku extends JPanel {
                 }
             }
         }
-        return r;
+        return status;
     }
     
     public void setPossMode(boolean c) {
@@ -192,7 +195,9 @@ public class Sudoku extends JPanel {
         Border outside = ((CompoundBorder) label[selectedRow][selectedColumn]
                 .getBorder()).getOutsideBorder();
         label[selectedRow][selectedColumn].setBorder(
-                   new CompoundBorder(outside, new LineBorder(Color.black, 1)));
+                   new CompoundBorder(outside, 
+                           new CompoundBorder(new LineBorder(Color.black, 1), 
+                                              new EmptyBorder(1, 1, 1, 1))));
         
         selectedRow = row;
         selectedColumn = column;
@@ -238,6 +243,14 @@ public class Sudoku extends JPanel {
                 }
             }
         }
+    }
+    
+    public boolean isAllFilled() {
+        return grid.isAllFilled();
+    }
+    
+    public void fillSuggestions() {
+        grid.fillSuggestions();
     }
     
     public void refresh(int row, int column) {
@@ -306,10 +319,15 @@ public class Sudoku extends JPanel {
     
     public void reset() {
         grid.reset();
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                containsValue[i][j] = !grid.isEditable(i, j);
+            }
+        }
         refresh();
     }
     
-    public boolean isPuzzleValid() {
+    public int isPuzzleValid() {
         return Grid.isSolvable(grid.copy());
     }
     

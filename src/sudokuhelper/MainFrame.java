@@ -1,5 +1,6 @@
 package sudokuhelper;
 
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -33,9 +34,7 @@ public class MainFrame extends JFrame {
         @Override
         public void exec(MouseEvent e) {
             MainFrame.this.requestFocusInWindow();
-            number = 0;
-            typeLabel.setText("");
-            possLabel.setText(sudoku.getSelectedPoss());
+            resetLabels();
             
             //TODO temporary code below
             if (e.getButton() == MouseEvent.BUTTON3) {
@@ -53,11 +52,12 @@ public class MainFrame extends JFrame {
     private final JCheckBox possAsNumC;
     private final JLabel possLabel;
     private final JLabel typeLabel;
+    private final StopwatchLabel stopwatchLabel;
     
     private int number = 0; //for typing
     
     public MainFrame() {
-        super("Sudoku Helper");
+        super("Sudoku Helper " + Main.VERSION);
         
         JMenuBar menuBar = new JMenuBar();
         
@@ -84,11 +84,20 @@ public class MainFrame extends JFrame {
                         MainFrame.this.getTitle(),
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.PLAIN_MESSAGE);
-                if (choice == JOptionPane.YES_OPTION && !sudoku.solve()) {
-                    String msg = "<html><font size=5 color=red>";
-                    msg += "This puzzle does not have a solution.<br>";
-                    msg += "<font size=5 color=orange>"
-                            + "Or it could not be found in 5 seconds...</font>";
+                if (choice == JOptionPane.YES_OPTION) {
+                    int status = sudoku.solve();
+                    if (status == Grid.VALID) {
+                        stopwatchLabel.stop();
+                        return;
+                    }
+                    String msg = "<html><font size=5 color=";
+                    if (status == Grid.INVALID) {
+                        msg += "red>This puzzle does not have a solution";
+                    } else if (status == Grid.UNKNOWN) {
+                        msg += "orange>This puzzle could not be solved<br>"
+                                + "in less than " + (Grid.TEMP_TIME_OUT/1000)
+                                + " seconds";
+                    }
                     msg += "</font></html>";
                     JOptionPane.showMessageDialog(MainFrame.this, msg,
                             MainFrame.this.getTitle(), JOptionPane.PLAIN_MESSAGE);
@@ -100,20 +109,17 @@ public class MainFrame extends JFrame {
         validateMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                String msg = "<html><font size=8 color=";
-                long start = System.currentTimeMillis();
-                if (sudoku.isPuzzleValid()) {
-                    msg += "green>Puzzle is valid";
-                } else {
-                    //FIXME remove it after fixing solving algorithm
-                    if (System.currentTimeMillis() - start > 5000) {
-                        msg = "<html><font size=4 color=orange>";
+                String msg = "<html><font size=";
+                int status = sudoku.isPuzzleValid();
+                if (status == Grid.VALID) {
+                    msg += "8 color=green>Puzzle is valid";
+                } else if (status == Grid.INVALID) {
+                    msg += "8 color=red>Puzzle is invalid";
+                } else if (status == Grid.UNKNOWN) {
+                    msg += "4 color=orange>";
                         msg += "Algorithm was unable to validate this<br>";
                         msg += "puzzle in less than 5 seconds.<br>";
                         msg += "It's highly probable that puzzle is invalid.";
-                    } else {
-                        msg += "red>Puzzle is invalid";
-                    }
                 }
                 msg += "</font></html>";
                 JOptionPane.showMessageDialog(MainFrame.this, msg,
@@ -126,9 +132,8 @@ public class MainFrame extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 sudoku.reset();
-                number = 0;
-                typeLabel.setText("");
-                possLabel.setText(sudoku.getSelectedPoss());
+                resetLabels();
+                stopwatchLabel.start();
             }
         });
         
@@ -158,6 +163,16 @@ public class MainFrame extends JFrame {
             }
         });
         
+        JMenuItem fillPoss = new JMenuItem("Fill all");
+        fillPoss.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sudoku.fillSuggestions();
+                sudoku.refresh();
+                resetLabels();
+            }
+        });
+        
         autoRemPossC = new JCheckBox("Auto remove", true);
         autoRemPossC.addActionListener(new ActionListener() {
             @Override
@@ -178,8 +193,8 @@ public class MainFrame extends JFrame {
         JMenuItem aboutMenuItem = new JMenuItem("About");
         aboutMenuItem.addActionListener(new ActionListener() {
             private final String msg = "<html><table>"
-                    + "<tr><td>Version:<td></td>" + Main.VERSION + " ("
-                    + Main.DATE + ")</td></tr>"
+                    + "<tr><td>Version:<td></td>" + Main.VERSION + "</td></tr>"
+                    + "<tr><td>Release:<td></td>" + Main.DATE + "</td></tr>"
                     + "<tr><td>Author:<td></td>Jaroslaw Pawlak</td></tr>"
                     + "<tr><td>Contact:<td></td>jpawlak7@gmail.com</td></tr>"
                     + "</table></html>";
@@ -224,7 +239,12 @@ public class MainFrame extends JFrame {
         possLabel.setFont(new Font("Arial", Font.PLAIN, 12));
         
         typeLabel = new JLabel("");
+        typeLabel.setHorizontalAlignment(JLabel.CENTER);
+        typeLabel.setPreferredSize(new Dimension(20, 0));
         typeLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        
+        stopwatchLabel = new StopwatchLabel();
+        stopwatchLabel.setFont(new Font("Courier New", Font.BOLD, 12));
         
         setJMenuBar(menuBar);
             menuBar.add(sudokuMenu);
@@ -236,8 +256,9 @@ public class MainFrame extends JFrame {
             menuBar.add(settingsMenu);
                 settingsMenu.add(autosolvingMenu);
                 settingsMenu.add(suggestionsMenu);
-                    suggestionsMenu.add(possAsNumC);
                     suggestionsMenu.add(autoRemPossC);
+                    suggestionsMenu.add(possAsNumC);
+                    suggestionsMenu.add(fillPoss);
             menuBar.add(helpMenu);
                 helpMenu.add(aboutMenuItem);
                 helpMenu.add(keysMenuItem);
@@ -246,34 +267,35 @@ public class MainFrame extends JFrame {
             menuBar.add(Box.createHorizontalStrut(10));
             menuBar.add(typeLabel);
             menuBar.add(Box.createHorizontalStrut(10));
-        
-        boolean autoRemovePoss = autoRemPossC.isSelected();
-        boolean autoFillBasic = autoFillSlider.getValue() >= 1;
-        boolean autoFillAdvanced = autoFillSlider.getValue() >= 2;
+            menuBar.add(stopwatchLabel);
+            menuBar.add(Box.createHorizontalStrut(5));
                     
-        sudoku = new Sudoku(autoRemovePoss, autoFillBasic,
-                autoFillAdvanced, possAsNumC.isSelected(), false, 15, 3, m);
+        sudoku = new Sudoku(autoRemPossC.isSelected(),
+                autoFillSlider.getValue() >= 1,
+                autoFillSlider.getValue() >= 2,
+                possAsNumC.isSelected(), false, 15, 3, m);
         setContentPane(sudoku);
-        possLabel.setText(sudoku.getSelectedPoss());
+        resetLabels();
+        stopwatchLabel.start();
         
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
                 int size = sudoku.getSudokuSize();
                 int k = e.getKeyCode();
-                boolean deleteNumber = true;
+                boolean resetLabel = true;
                 if (k == KeyEvent.VK_UP || k == KeyEvent.VK_W) {
                     sudoku.select(Sudoku.UP);
-                    possLabel.setText(sudoku.getSelectedPoss());
+                    resetLabels();
                 } else if (k == KeyEvent.VK_DOWN || k == KeyEvent.VK_S) {
                     sudoku.select(Sudoku.DOWN);
-                    possLabel.setText(sudoku.getSelectedPoss());
+                    resetLabels();
                 } else if (k == KeyEvent.VK_LEFT || k == KeyEvent.VK_A) {
                     sudoku.select(Sudoku.LEFT);
-                    possLabel.setText(sudoku.getSelectedPoss());
+                    resetLabels();
                 } else if (k == KeyEvent.VK_RIGHT || k == KeyEvent.VK_D) {
                     sudoku.select(Sudoku.RIGHT);
-                    possLabel.setText(sudoku.getSelectedPoss());
+                    resetLabels();
                 } else if (k == KeyEvent.VK_BACK_SPACE
                         || k == KeyEvent.VK_DELETE
                         || k == KeyEvent.VK_E) {
@@ -283,7 +305,7 @@ public class MainFrame extends JFrame {
                 } else if (k == KeyEvent.VK_R
                         || k == KeyEvent.VK_U) {
                     sudoku.undo();
-                    possLabel.setText(sudoku.getSelectedPoss());
+                    resetLabels();
                 } else if (k == KeyEvent.VK_ENTER
                         || k == KeyEvent.VK_Q) {
                     if (size > 3 && number > 0 && number <= size*size) {
@@ -314,7 +336,7 @@ public class MainFrame extends JFrame {
                         case KeyEvent.VK_0: digit = 0; break;
                         default: return;
                     }
-                    deleteNumber = false;
+                    resetLabel = false;
                     if (size <= 3) {
                         if (digit > 0 && digit <= size*size) {
                             fill(digit);
@@ -329,22 +351,31 @@ public class MainFrame extends JFrame {
                         }
                     }
                 }
-                if (deleteNumber) {
-                    number = 0;
-                    typeLabel.setText("");
+                if (resetLabel) {
+                    resetLabels();
                 }
             }
             private void fill(int n) {
                 sudoku.refresh();
                 if (possMode) {
                     sudoku.possChange(n);
-                    possLabel.setText(sudoku.getSelectedPoss());
                 } else {
                     if (sudoku.isAllowed(n)) {
                         sudoku.fillSelected(n);
-                        possLabel.setText(sudoku.getSelectedPoss());
+                        if (sudoku.isAllFilled() && !stopwatchLabel.isStopped()) {
+                            stopwatchLabel.stop();
+                            JOptionPane.showMessageDialog(MainFrame.this,
+                                    "<html><font size=5 color=green>"
+                                    + "Congratulations! You solved it!<br>"
+                                    + "</font><font size=5>"
+                                    + "Your time: " + stopwatchLabel.getText()
+                                    + "</font></html>",
+                                    MainFrame.this.getTitle(),
+                                    JOptionPane.PLAIN_MESSAGE);
+                        }
                     }
                 }
+                resetLabels();
             }
         });
         
@@ -381,23 +412,26 @@ public class MainFrame extends JFrame {
                 this.getTitle(), JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
         if (choice == JOptionPane.OK_OPTION) {
-            number = 0;
-            typeLabel.setText("");
-            possLabel.setText("");
-            
-            boolean autoRemovePoss = autoRemPossC.isSelected();
-            boolean autoFillBasic = autoFillSlider.getValue() >= 1;
-            boolean autoFillAdvanced = autoFillSlider.getValue() >= 2;
-
-            sudoku = new Sudoku(autoRemovePoss, autoFillBasic, autoFillAdvanced,
+            sudoku = new Sudoku(autoRemPossC.isSelected(),
+                    autoFillSlider.getValue() >= 1,
+                    autoFillSlider.getValue() >= 2,
                     possAsNumC.isSelected(), newSudokuChoices.getFillPoss(),
                     newSudokuChoices.getInitialNumbers(),
                     newSudokuChoices.getSudokuSize(), m);
+            resetLabels();
             setContentPane(sudoku);
             pack();
             revalidate();
             repaint();
+            stopwatchLabel.start();
         }
+    }
+    
+    private void resetLabels() {
+        number = 0;
+        typeLabel.setText("");
+        possLabel.setText(sudoku.getSudokuSize() > 2?
+                          sudoku.getSelectedPoss() : "");
     }
     
     

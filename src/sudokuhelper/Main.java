@@ -4,22 +4,20 @@ package sudokuhelper;
  * @author Jaroslaw Pawlak
  */
 public class Main {
-    public static final String VERSION = "1.1+";
-    public static final String DATE = "not released yet";
+    public static final String VERSION = "1.2";
+    public static final String DATE = "12/03/2012";
     
     public static void main(String[] args) {
+        
         new MainFrame();
     }
 }
 
 /** //TODO
- * auto last game save/load
- * save/load settings
- * best scores
- * fix the borders
- * 
- * change:
- * history + undo in Grid
- * solve button + confirmation
- * auto add poss has been removed
+ * opt: isSolvable - use history instead of copying
+ * new: auto last game save/load
+ * new: save/load settings
+ * new: best scores
+ * new: hint - fill new number
+ * fix: solver in generate method (timeout is for single sudoku only
  */

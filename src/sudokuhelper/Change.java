@@ -21,4 +21,8 @@ public class Change {
         this.operation = operation;
         this.last = last;
     }
+    
+    public static Change marker() {
+        return new Change(-1, -1, -1, -1, true);
+    }
 }
