@@ -4,19 +4,11 @@ import java.awt.Point;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.Stack;
-import javax.swing.JOptionPane;
 
 /**
  * @author Jaroslaw Pawlak
  */
 public class Grid {
-    private static Grid solved = null;
-    //FIXME improve solving algorithm and remove this:
-    private static long temporarySolving = -1;
-    public static final int TEMP_TIME_OUT = 5000;
-    public static final int VALID = 1;
-    public static final int INVALID = 2;
-    public static final int UNKNOWN = 3;
     
     private final Cell[][] grid;
     private final int size;
@@ -71,17 +63,10 @@ public class Grid {
                 }
             }
             
-            int status = isSolvable(g.copy());
-            if (status == INVALID) {
+            
+            if (g.solvedCopy() == null) {
+                System.out.println("generated invalid puzzle");
                 continue;
-            } else if (status == UNKNOWN) {
-                String msg = "<html><font size=4 color=orange>";
-                msg += "Algorithm was not able<br>";
-                msg += "to validate this puzzle.<br>";
-                msg += "It may not have a solution.";
-                msg += "</font></html>";
-                JOptionPane.showMessageDialog(null, msg,
-                        "Sudoku Helper", JOptionPane.WARNING_MESSAGE);
             }
             
             if (autoRemovePoss) {
@@ -119,20 +104,32 @@ public class Grid {
         }
     }
     
-    public int solve() {
-        int status = isSolvable(this.copy());
-        if (status == VALID) {
-            history.add(Change.marker());
-            for (int i = 0; i < size*size; i++) {
-                for (int j = 0; j < size*size; j++) {
-                    if (grid[i][j].value() == 0) {
-                        grid[i][j].fill(solved.grid[i][j].value());
-                        history.add(new Change(i, j, 0, Change.NORMAL, false));
+    /**
+     * Returns true if something changed or false if unsolvable.
+     */
+    public boolean solve() {
+        Grid solved = this.solvedCopy();
+        if (solved == null) {
+            return false;
+        }
+        
+        history.add(Change.marker());
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                if (grid[i][j].value() == 0) {
+                    grid[i][j].fill(solved.grid[i][j].value());
+                    history.add(new Change(i, j, 0, Change.NORMAL, false));
+                    if (autoRemovePoss) {
+                        for (int n : grid[i][j].poss()) {
+                            grid[i][j].poss().remove(n);
+                            history.add(new Change(i, j, n, Change.POSS_ADD, false));
+                        }
                     }
                 }
             }
         }
-        return status;
+            
+        return true;
     }
     
     public void reset() {
@@ -226,13 +223,14 @@ public class Grid {
                 if (!cell.poss().contains(n)) {
                     history.add(new Change(cell.row, cell.column, n,
                             Change.POSS_REM, false));
+                    //TODO opt: it may add something that will be removed later
                     cell.poss().add(n);
                 }
             }
         }
         for (Cell cell : all()) {
             for (int n : cell.poss()) {
-                if (!isAllowed(cell, n)) {
+                if (!isAllowed(cell, n) || cell.value() != 0) {
                     history.add(new Change(cell.row, cell.column, n,
                             Change.POSS_ADD, false));
                     cell.poss().remove(n);
@@ -250,12 +248,7 @@ public class Grid {
             return;
         }
         history.add(new Change(row, column, grid[row][column].value(), Change.NORMAL, user));
-//        if (user && autoRemovePoss) {
-//            for (int n : grid[row][column].poss()) {
-//                history.add(new Change(row, column, n, Change.POSS_ADD, false));
-//                grid[row][column].poss().remove(n);
-//            }
-//        }
+        
         if (grid[row][column].value() != 0) {
             clear(row, column, user);
         }
@@ -268,7 +261,7 @@ public class Grid {
         if (autoRemovePoss) {
             for (Cell cell : all()) {
                 for (int n : cell.poss()) {
-                    if (!isAllowed(cell, n)) {
+                    if (!isAllowed(cell, n) || cell.value() != 0) {
                         history.add(new Change(cell.row, cell.column, n,
                                 Change.POSS_ADD, false));
                         cell.poss().remove(n);
@@ -340,8 +333,139 @@ public class Grid {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        String r = "";
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                r += grid[i][j].value();
+            }
+            r += "\n";
+        }
+        return r;
+    }
+    
+    public Grid copy() {
+        Grid r = new Grid(size);
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                r.grid[i][j] = grid[i][j].copy();
+            }
+        }
+        return r;
+    }
+    
+    public boolean isAllFilled() {
+        for (Cell cell : all()) {
+            if (cell.value() == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Returns filled copy of this grid or null if unsolvable
+     */
+    public Grid solvedCopy() {
+        Grid gridCopy = this.copy();
+        
+        //fill poss
+        for (Cell cell : gridCopy.all()) {
+            cell.poss().addAll();
+            for (Cell neighbour : gridCopy.neighbours(cell.row, cell.column, false)) {
+                if (neighbour.value() != 0) {
+                    cell.poss().remove(neighbour.value());
+                }
+            }
+        }
+        
+        //fill what you can
+        gridCopy.fillAll();
+        if (gridCopy.isAllFilled()) {
+            return gridCopy;
+        }
+        gridCopy.history.clear();
+        
+        if (gridCopy.privateSolve()) {
+            return gridCopy;
+        } else {
+            return null;
+        }
+    }
+    
+    private boolean privateSolve() {
+        //check if there exists such a zone and such a number that there is no
+        //cell in this zone where the number can be inserted
+        boolean contains = false;
+        for (int n = 1; n <= size*size; n++) {
+            for (int i = 0; i < size*size; i++) {
+                contains = false;
+                for (Cell cell : row(i, -1, true)) {
+                    if (cell.poss().contains(n) || cell.value() == n) {
+                        contains = true;
+                        break;
+                    }
+                }
+                if (!contains) {
+                    return false;
+                }
+            }
+            for (int i = 0; i < size*size; i++) {
+                contains = false;
+                for (Cell cell : column(-1, i, true)) {
+                    if (cell.poss().contains(n) || cell.value() == n) {
+                        contains = true;
+                        break;
+                    }
+                }
+                if (!contains) {
+                    return false;
+                }
+            }
+            for (int i = 0; i < size*size; i += size) {
+                for (int j = 0; j < size*size; j += size) {
+                    contains = false;
+                    for (Cell cell : square(i, j, true)) {
+                        if (cell.poss().contains(n) || cell.value() == n) {
+                            contains = true;
+                            break;
+                        }
+                    }
+                    if (!contains) {
+                        return false;
+                    }
+                }
+            }
+        }
+        
+        //find an empty cell
+        Cell emptyCell = null;
+        for (Cell cell : all()) {
+            if (cell.value() == 0) {
+                emptyCell = cell;
+                break;
+            }
+        }
+        
+        for (int n : emptyCell.poss()) {
+            history.add(new Change(emptyCell.row, emptyCell.column,
+                    0, Change.NORMAL, true));
+            emptyCell.fill(n);
+            fillAll();
+            if (isAllFilled() || privateSolve()) {
+                return true;
+            } else if (!history.isEmpty()) {
+                undo();
+            }
+        }
+        return false;
+    }
     
     
+    
+    // ITERATOR GETTERS
     
     private Iterable<Cell> neighbours(final int row, final int column, final boolean inc) {
         return new Iterable<Cell>() {
@@ -396,94 +520,8 @@ public class Grid {
             }
         };
     }
-
-    @Override
-    public String toString() {
-        String r = "";
-        for (int i = 0; i < size*size; i++) {
-            for (int j = 0; j < size*size; j++) {
-                r += grid[i][j].value();
-            }
-            r += "\n";
-        }
-        return r;
-    }
     
-    public Grid copy() {
-        Grid r = new Grid(size);
-        for (int i = 0; i < size*size; i++) {
-            for (int j = 0; j < size*size; j++) {
-                r.grid[i][j] = grid[i][j].copy();
-            }
-        }
-        return r;
-    }
-    
-    public boolean isAllFilled() {
-        for (Cell cell : all()) {
-            if (cell.value() == 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-    
-    
-    
-    public static int isSolvable(Grid gridCopy) {
-        if (temporarySolving == -1) {
-            temporarySolving = System.currentTimeMillis();
-        } else if (System.currentTimeMillis() - temporarySolving > TEMP_TIME_OUT) {
-            return UNKNOWN;
-        }
-        if (!gridCopy.initialPoss) {
-            gridCopy.initialPoss = true;
-            for (Cell cell : gridCopy.all()) {
-                cell.poss().addAll();
-                for (Cell neighbour : gridCopy.neighbours(cell.row, cell.column, false)) {
-                    if (neighbour.value() != 0) {
-                        cell.poss().remove(neighbour.value());
-                    }
-                }
-            }
-        }
-            
-        gridCopy.fillAll();
-        if (gridCopy.isAllFilled()) {
-            temporarySolving = -1;
-            solved = gridCopy;
-            return VALID;
-        }
-        
-        Point p = new Point(-1, -1);
-        for (int i = 0; i < gridCopy.size*gridCopy.size; i++) {
-            for (int j = 0; j < gridCopy.size*gridCopy.size; j++) {
-                if (gridCopy.grid[i][j].value() == 0) {
-                    if (gridCopy.grid[i][j].poss().size() == 0) {
-                        return INVALID;
-                    } else if (p.x == -1 || gridCopy.grid[i][j].poss().size()
-                            < gridCopy.grid[p.x][p.y].poss().size()) {
-                        p.x = i;
-                        p.y = j;
-                    }
-                }
-            }
-        }
-        
-        for (int n : gridCopy.grid[p.x][p.y].poss()) {
-            Grid anotherCopy = gridCopy.copy();
-            anotherCopy.grid[p.x][p.y].fill(n);
-            int status = isSolvable(anotherCopy);
-            if (status == VALID || status == UNKNOWN) {
-                temporarySolving = -1;
-                return status;
-            }
-        }
-        temporarySolving = -1;
-        return INVALID;
-    }
-    
-    
+    // ITERATOR CLASSES
     
     private class ItrAll implements Iterator<Cell> {
         protected int i = 0, j = 0;

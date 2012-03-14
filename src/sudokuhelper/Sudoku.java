@@ -124,21 +124,23 @@ public class Sudoku extends JPanel {
         }
     }
     
-    public int solve() {
-        int status = grid.solve();
-        if (status == Grid.VALID) {
-            for (int i = 0; i < size*size; i++) {
-                for (int j = 0; j < size*size; j++) {
-                    if (!containsValue[i][j]) {
-                        containsValue[i][j] = true;
-                        label[i][j].setFont(FONT_NORMAL);
-                        label[i][j].setForeground(COLOR_AUTOFILL);
-                        label[i][j].setText("" + grid.value(i, j));
-                    }
+    public boolean solve() {
+        if (!grid.solve()) {
+            return false;
+        }
+
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                if (!containsValue[i][j]) {
+                    containsValue[i][j] = true;
+                    label[i][j].setFont(FONT_NORMAL);
+                    label[i][j].setForeground(COLOR_AUTOFILL);
+                    label[i][j].setText("" + grid.value(i, j));
                 }
             }
         }
-        return status;
+ 
+        return true;
     }
     
     public void setPossMode(boolean c) {
@@ -183,13 +185,6 @@ public class Sudoku extends JPanel {
     
     private void select(int row, int column) {
         refresh(errorRow, errorColumn);
-//        if (grid.value(errorRow, errorColumn) != 0) {
-//            if (grid.isEditable(errorRow, errorColumn)) {
-//                label[errorRow][errorColumn].setForeground(COLOR_NORMAL);
-//            } else {
-//                label[errorRow][errorColumn].setForeground(COLOR_UNEDITABLE);
-//            }
-//        }
         
         //deselect
         Border outside = ((CompoundBorder) label[selectedRow][selectedColumn]
@@ -327,8 +322,8 @@ public class Sudoku extends JPanel {
         refresh();
     }
     
-    public int isPuzzleValid() {
-        return Grid.isSolvable(grid.copy());
+    public boolean isPuzzleValid() {
+        return grid.solvedCopy() != null;
     }
     
     public String getSelectedPoss() {

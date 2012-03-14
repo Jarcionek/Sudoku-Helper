@@ -1,5 +1,5 @@
-A program that helps in Sudoku solving by filling in the easiest numbers to fill. Future features include:
-- uneditable cells
-- defining the level of auto-fill algorithm complexity (allows change between the game and the solver)
-- turning auto-suggestions on and off 
-- generating a partially completed grid
+A sudoku game/solver.
+In a game mode it can help the user
+by removing possibilites that are no
+longer valid or by filling in
+the easiest numbers.

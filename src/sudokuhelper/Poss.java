@@ -33,6 +33,15 @@ public class Poss implements Iterable<Integer> {
         return r;
     }
     
+    public boolean isEmpty() {
+        for (int i = 0; i < poss.length; i++) {
+            if (poss[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
     public int get() {
         for (int i = 0; i < poss.length; i++) {
             if (poss[i]) {
