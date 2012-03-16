@@ -37,8 +37,8 @@ public class MainFrame extends JFrame {
     private final JMenuItem exitMenuItem;
     private final JSlider autoFillSlider;
     private final JMenuItem fillPoss;
-    private final JCheckBox autoRemPossC;
-    private final JCheckBox possAsNumC;
+    private final JSlider autoPossSlider;
+    private final JCheckBox possAsNumStyle;
     private final JMenuItem aboutMenuItem;
     private final JMenuItem keysMenuItem;   
     private final JLabel possLabel;
@@ -73,8 +73,8 @@ public class MainFrame extends JFrame {
         exitMenuItem = new JMenuItem("Exit");
         autoFillSlider = new JSlider(0, 2, 1);
         fillPoss = new JMenuItem("Fill all");
-        autoRemPossC = new JCheckBox("Auto remove", true);
-        possAsNumC = new JCheckBox("Numpad style", true);
+        autoPossSlider = new JSlider(0, 2, 1);
+        possAsNumStyle = new JCheckBox("Numpad style", true);
         aboutMenuItem = new JMenuItem("About");
         keysMenuItem = new JMenuItem("Keys");        
         possLabel = new JLabel("");        
@@ -83,10 +83,11 @@ public class MainFrame extends JFrame {
         
         createJMenuBar();
                     
-        sudoku = new Sudoku(autoRemPossC.isSelected(),
+        sudoku = new Sudoku(autoPossSlider.getValue() >= 1,
+                autoPossSlider.getValue() >= 2,
                 autoFillSlider.getValue() >= 1,
                 autoFillSlider.getValue() >= 2,
-                possAsNumC.isSelected(), false, 15, 3, m);
+                possAsNumStyle.isSelected(), false, 15, 3, m);
         setContentPane(new JScrollPane(sudoku));
         resetLabels();
         stopwatchLabel.start();
@@ -116,7 +117,8 @@ public class MainFrame extends JFrame {
                 } else if (k == KeyEvent.VK_SPACE) {
                     sudoku.setPossMode(possMode = !possMode);
                 } else if (k == KeyEvent.VK_R
-                        || k == KeyEvent.VK_U) {
+                        || k == KeyEvent.VK_U
+                        || k == KeyEvent.VK_Z) {
                     sudoku.undo();
                     resetLabels();
                 } else if (k == KeyEvent.VK_ENTER
@@ -218,6 +220,7 @@ public class MainFrame extends JFrame {
         JMenu sudokuMenu = new JMenu("Sudoku");
         JMenu settingsMenu = new JMenu("Settings");
         JMenu autosolvingMenu = new JMenu("Solver");
+        JMenu autoPoss = new JMenu("Auto remove");
         JMenu suggestionsMenu = new JMenu("Suggestions");
         JMenu helpMenu = new JMenu("Help");
 
@@ -283,17 +286,26 @@ public class MainFrame extends JFrame {
             }
         });
         
-        autoRemPossC.addActionListener(new ActionListener() {
+        autoPossSlider.setPaintLabels(true);
+        autoPossSlider.setLabelTable(new Hashtable() {
+            {
+                put(0, new JLabel("off"));
+                put(1, new JLabel("basic"));
+                put(2, new JLabel("advanced"));
+            }
+        });
+        autoPossSlider.addChangeListener(new ChangeListener() {
             @Override
-            public void actionPerformed(ActionEvent e) {
-                sudoku.setAutoRemovePoss(autoRemPossC.isSelected());
+            public void stateChanged(ChangeEvent e) {
+                sudoku.setAutoRemovePossBasic(autoPossSlider.getValue() >= 1);
+                sudoku.setAutoRemovePossAdvanced(autoPossSlider.getValue() >= 2);
             }
         });
         
-        possAsNumC.addActionListener(new ActionListener() {
+        possAsNumStyle.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                sudoku.setPossAsNum(possAsNumC.isSelected());
+                sudoku.setPossAsNum(possAsNumStyle.isSelected());
                 sudoku.refresh();
             }
         });
@@ -331,8 +343,9 @@ public class MainFrame extends JFrame {
                 settingsMenu.add(autosolvingMenu);
                     autosolvingMenu.add(autoFillSlider);
                 settingsMenu.add(suggestionsMenu);
-                    suggestionsMenu.add(autoRemPossC);
-                    suggestionsMenu.add(possAsNumC);
+                    suggestionsMenu.add(autoPoss);
+                        autoPoss.add(autoPossSlider);
+                    suggestionsMenu.add(possAsNumStyle);
                     suggestionsMenu.add(fillPoss);
             menuBar.add(helpMenu);
                 helpMenu.add(aboutMenuItem);
@@ -352,10 +365,11 @@ public class MainFrame extends JFrame {
                 this.getTitle(), JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
         if (choice == JOptionPane.OK_OPTION) {
-            sudoku = new Sudoku(autoRemPossC.isSelected(),
+            sudoku = new Sudoku(autoPossSlider.getValue() >= 1,
+                    autoPossSlider.getValue() >= 2,
                     autoFillSlider.getValue() >= 1,
                     autoFillSlider.getValue() >= 2,
-                    possAsNumC.isSelected(), newSudokuChoices.getFillPoss(),
+                    possAsNumStyle.isSelected(), newSudokuChoices.getFillPoss(),
                     newSudokuChoices.getInitialNumbers(),
                     newSudokuChoices.getSudokuSize(), m);
             resetLabels();
@@ -378,11 +392,17 @@ public class MainFrame extends JFrame {
             return;
         }
         
-        if (sudoku.solve()) {
+        Status status = sudoku.solve();
+        if (status == Status.SOLVED) {
             stopwatchLabel.stop();
         } else {
-            String msg = "<html><font size=5 color=red>";
-            msg += "This puzzle does not have a solution";
+            String msg = "<html><font size=5 color=";
+            if (status == Status.UNSOLVABLE) {
+                msg += "red>This puzzle does not have a solution";
+            } else {
+                msg += "orange>This puzzle is too complex<br>";
+                msg += "to be solved automatically.<br>";
+            }
             msg += "</font></html>";
             
             JOptionPane.showMessageDialog(MainFrame.this, msg,
@@ -392,10 +412,11 @@ public class MainFrame extends JFrame {
     
     private void actionValidate() {
         String msg = "<html><font size=";
-        if (sudoku.isPuzzleValid()) {
-            msg += "8 color=green>Puzzle is valid";
-        } else {
-            msg += "8 color=red>Puzzle is invalid";
+        switch (sudoku.isPuzzleValid()) {
+            case SOLVED: msg += "5 color=green>Puzzle is valid"; break;
+            case UNSOLVABLE: msg += "5 color=red>Puzzle is invalid"; break;
+            case UNKNOWN: msg += "5 color=orange>This puzzle is too complex<br>"
+                    + "to be validated."; break;
         }
         msg += "</font></html>";
         JOptionPane.showMessageDialog(MainFrame.this, msg,
@@ -435,13 +456,13 @@ public class MainFrame extends JFrame {
                 + "for Sudoku greater than 9x9" + "</font>" + "</td></tr>"
                     
                 + "<tr><td>Erase:<td></td>"
-                + "BACKSPACE, DELETE, Q" + "</td></tr>"
+                + "BACKSPACE, DELETE, E" + "</td></tr>"
                     
                 + "<tr><td>Change<br>Suggestions:<td></td>"
                 + "SPACE" + "</td></tr>"
                     
                 + "<tr><td>Undo:<td></td>"
-                + "R, U" + "</td></tr>"
+                + "R, U, Z" + "</td></tr>"
                     
                 + "</table></html>";
         

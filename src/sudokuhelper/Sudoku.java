@@ -50,9 +50,10 @@ public class Sudoku extends JPanel {
     private boolean possAsNum;
     private Color selectionColor = SELECTION_COLOR_NORMAL;
     
-    public Sudoku(boolean autoRemovePoss, boolean autoFillBasic,
-            boolean autoFillAdvanced, boolean possAsNum, boolean initialPoss,
-            int initNumbers, int size, final MouseListenerMethod m) {
+    public Sudoku(boolean autoPossBasic, boolean autoPossAdvanced,
+            boolean autoFillBasic, boolean autoFillAdvanced, boolean possAsNum,
+            boolean initialPoss, int initNumbers, int size,
+            final MouseListenerMethod m) {
         super(new GridBagLayout());
         this.size = size;
         this.selectedRow = size*size / 2;
@@ -60,8 +61,8 @@ public class Sudoku extends JPanel {
         this.errorRow = size*size / 2;
         this.errorColumn = size*size / 2;
         this.possAsNum = possAsNum;
-        this.grid = Grid.generate(autoRemovePoss, autoFillBasic,
-                autoFillAdvanced, initialPoss, initNumbers, size);
+        this.grid = Grid.generate(autoPossBasic, autoPossAdvanced,
+                autoFillBasic, autoFillAdvanced, initialPoss, initNumbers, size);
         this.label = new JLabel[size*size][size*size];
         this.containsValue = new boolean[size*size][size*size];
         
@@ -124,9 +125,10 @@ public class Sudoku extends JPanel {
         }
     }
     
-    public boolean solve() {
-        if (!grid.solve()) {
-            return false;
+    public Status solve() {
+        Status status = grid.solve();
+        if (status != Status.SOLVED) {
+            return status;
         }
 
         for (int i = 0; i < size*size; i++) {
@@ -140,7 +142,7 @@ public class Sudoku extends JPanel {
             }
         }
  
-        return true;
+        return status;
     }
     
     public void setPossMode(boolean c) {
@@ -296,8 +298,12 @@ public class Sudoku extends JPanel {
         }
     }
     
-    public void setAutoRemovePoss(boolean c) {
+    public void setAutoRemovePossBasic(boolean c) {
         grid.autoPossBasic = c;
+    }
+    
+    public void setAutoRemovePossAdvanced(boolean c) {
+        grid.autoPossAdvanced = c;
     }
     
     public void setAutoFillBasic(boolean c) {
@@ -322,8 +328,8 @@ public class Sudoku extends JPanel {
         refresh();
     }
     
-    public boolean isPuzzleValid() {
-        return grid.solvedCopy() != null;
+    public Status isPuzzleValid() {
+        return grid.isPuzzleValid();
     }
     
     public String getSelectedPoss() {

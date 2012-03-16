@@ -1,22 +1,14 @@
 package sudokuhelper;
 
-import java.awt.BorderLayout;
-import java.awt.GridLayout;
 import java.awt.Point;
-import java.util.Calendar;
-import java.util.Iterator;
 import java.util.Random;
 import java.util.Stack;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextPane;
 
 /**
  * @author Jaroslaw Pawlak
  */
 public class Grid {
+    public static final int TIMEOUT = 2000;
     
     private final Cell[][] grid;
     private final int size;
@@ -34,9 +26,11 @@ public class Grid {
         this.size = size;
     }
     
-    private Grid(boolean autoRemovePoss, boolean autoFillBasic,
-            boolean autoFillAdvanced, boolean initialPoss, int size) {
-        this.autoPossBasic = autoRemovePoss;
+    private Grid(boolean autoPossBasic, boolean autoPossAdvanced,
+            boolean autoFillBasic, boolean autoFillAdvanced,
+            boolean initialPoss, int size) {
+        this.autoPossBasic = autoPossBasic;
+        this.autoPossAdvanced = autoPossAdvanced;
         this.autoFillBasic = autoFillBasic;
         this.autoFillAdvanced = autoFillAdvanced;
         this.initialPoss = initialPoss;
@@ -50,11 +44,11 @@ public class Grid {
         }
     }
     
-    public static Grid generate(boolean autoRemovePoss, boolean autoFillBasic,
-            boolean autoFillAdvanced, boolean initialPoss, int initNumbers,
-            int size) {
+    public static Grid generate(boolean autoPossBasic, boolean autoPossAdvanced,
+            boolean autoFillBasic, boolean autoFillAdvanced,
+            boolean initialPoss, int initNumbers, int size) {
         while (true) {
-            Grid g = new Grid(autoRemovePoss, autoFillBasic,
+            Grid g = new Grid(autoPossBasic, autoPossAdvanced, autoFillBasic,
                     autoFillAdvanced, initialPoss, size);
 
             int i = initNumbers;
@@ -71,14 +65,17 @@ public class Grid {
                     i--;
                 }
             }
-
             
-            if (g.solvedCopy() == null) {
+            Object solved = g.solvedCopy();
+            if (solved == Status.UNKNOWN) {
+                Debug.println("generated unknown puzzle", Debug.GENERATION);
+                continue;
+            } else if (solved == Status.UNSOLVABLE) {
                 Debug.println("generated invalid puzzle", Debug.GENERATION);
                 continue;
             }
             
-            if (autoRemovePoss) {
+            if (autoPossBasic) {
                 for (Cell cell : g.all()) {
                     for (Cell neighbour : g.neighbours(cell.row, cell.column, false)) {
                         if (neighbour.value() != 0) {
@@ -118,17 +115,17 @@ public class Grid {
     /**
      * Returns true if something changed or false if unsolvable.
      */
-    public boolean solve() {
-        Grid solved = this.solvedCopy();
-        if (solved == null) {
-            return false;
+    public Status solve() {
+        Object solved = this.solvedCopy();
+        if (solved.getClass() != Grid.class) {
+            return (Status) solved;
         }
         
         history.add(Change.marker());
         for (int i = 0; i < size*size; i++) {
             for (int j = 0; j < size*size; j++) {
                 if (grid[i][j].value() == 0) {
-                    grid[i][j].fill(solved.grid[i][j].value());
+                    grid[i][j].fill(((Grid) solved).grid[i][j].value());
                     history.add(new Change(i, j, 0, Change.NORMAL, false));
                     if (autoPossBasic) {
                         for (int n : grid[i][j].poss()) {
@@ -140,7 +137,7 @@ public class Grid {
             }
         }
             
-        return true;
+        return Status.SOLVED;
     }
     
     public void reset() {
@@ -422,6 +419,16 @@ public class Grid {
     @Override
     public String toString() {
         String r = "";
+        
+        for (int i = 0; i < size*size; i++) {
+            for (int j = 0; j < size*size; j++) {
+                if (grid[i][j].value() != 0) {
+                    r += "object.grid[" + i + "][" + j + "].fill("
+                            + grid[i][j].value() + ");\n";
+                }
+            }
+        }
+        
         for (int i = 0; i < size*size; i++) {
             for (int j = 0; j < size*size; j++) {
                 r += grid[i][j].value() + " ";
@@ -456,10 +463,19 @@ public class Grid {
         return true;
     }
     
+    public Status isPuzzleValid() {
+        Object solved = solvedCopy();
+        if (solved.getClass() == Grid.class) {
+            return Status.SOLVED;
+        }
+        return (Status) solved;
+    }
+    
     /**
-     * Returns filled copy of this grid or null if unsolvable
+     * Returns filled copy of this grid or Status UNSOLVABLE or UNKNOWN
      */
-    public Grid solvedCopy() {
+    private Object solvedCopy() {
+        Debug.println("call: solvedCopy()", Debug.METHOD_CALL);
         Grid gridCopy = this.copy();
         
         //fill poss
@@ -472,35 +488,15 @@ public class Grid {
             }
         }
         
-//        return gridCopy.privateSolveCopying();
-        return gridCopy.privateSolveUndoing();
+        return gridCopy.privateSolveUndoing(System.currentTimeMillis());
     }
+
     
-    private Grid debuggingSolvedCopy(boolean copying) {
-        Grid gridCopy = this.copy();
+    private Object privateSolveUndoing(long start) {
+        Debug.println("call: privateSolveUndoing(" + start + ")", Debug.METHOD_CALL);
         
-        //fill poss
-        for (Cell cell : gridCopy.all()) {
-            cell.poss().addAll();
-            for (Cell neighbour : gridCopy.neighbours(cell.row, cell.column, false)) {
-                if (neighbour.value() != 0) {
-                    cell.poss().remove(neighbour.value());
-                }
-            }
-        }
-        
-        if (copying) {
-            return gridCopy.privateSolveCopying();
-        } else {
-            return gridCopy.privateSolveUndoing();
-        }
-    }
-    
-    private Grid privateSolveCopying() {
-        Debug.println("call: privateSolveCopying()", Debug.METHOD_CALL);
-        this.fillAll();
-        if (this.isAllFilled()) {
-            return this;
+        if (System.currentTimeMillis() - start > TIMEOUT) {
+            return Status.UNKNOWN;
         }
         
         //check if there exists such a zone and such a number that there is no
@@ -516,7 +512,7 @@ public class Grid {
                     }
                 }
                 if (!contains) {
-                    return null;
+                    return Status.UNSOLVABLE;
                 }
             }
             for (int i = 0; i < size*size; i++) {
@@ -528,7 +524,7 @@ public class Grid {
                     }
                 }
                 if (!contains) {
-                    return null;
+                    return Status.UNSOLVABLE;
                 }
             }
             for (int i = 0; i < size*size; i += size) {
@@ -541,81 +537,7 @@ public class Grid {
                         }
                     }
                     if (!contains) {
-                        return null;
-                    }
-                }
-            }
-        }
-        
-        //find an empty cell
-        Cell emptyCell = null;
-        for (Cell cell : all()) {
-            if (cell.value() == 0) {
-                if (cell.poss().isEmpty()) {
-                    return null;
-                } else if (emptyCell == null || cell.poss().size()
-                        < emptyCell.poss().size()) {
-                    emptyCell = cell;
-                    if (emptyCell.poss().size() == 2) {
-                        break;
-                    }
-                }
-            }
-        }
-        
-        for (int n : emptyCell.poss()) {
-            Grid gridCopy = this.copy();
-            gridCopy.fill(emptyCell.row, emptyCell.column, n, true);
-            Grid gridSolved = gridCopy.privateSolveCopying();
-            if (gridSolved != null) {
-                return gridSolved;
-            }
-        }
-        return null;
-    }
-    
-    private Grid privateSolveUndoing() {
-        Debug.println("call: privateSolveUndoing()", Debug.METHOD_CALL);
-        
-        //check if there exists such a zone and such a number that there is no
-        //cell in this zone where the number can be inserted
-        boolean contains = false;
-        for (int n = 1; n <= size*size; n++) {
-            for (int i = 0; i < size*size; i++) {
-                contains = false;
-                for (Cell cell : row(i, -1, true)) {
-                    if (cell.poss().contains(n) || cell.value() == n) {
-                        contains = true;
-                        break;
-                    }
-                }
-                if (!contains) {
-                    return null;
-                }
-            }
-            for (int i = 0; i < size*size; i++) {
-                contains = false;
-                for (Cell cell : column(-1, i, true)) {
-                    if (cell.poss().contains(n) || cell.value() == n) {
-                        contains = true;
-                        break;
-                    }
-                }
-                if (!contains) {
-                    return null;
-                }
-            }
-            for (int i = 0; i < size*size; i += size) {
-                for (int j = 0; j < size*size; j += size) {
-                    contains = false;
-                    for (Cell cell : square(i, j, true)) {
-                        if (cell.poss().contains(n) || cell.value() == n) {
-                            contains = true;
-                            break;
-                        }
-                    }
-                    if (!contains) {
-                        return null;
+                        return Status.UNSOLVABLE;
                     }
                 }
             }
@@ -639,312 +561,44 @@ public class Grid {
         
         for (int n : emptyCell.poss()) {
             fill(emptyCell.row, emptyCell.column, n, true);
-            if (isAllFilled() || privateSolveUndoing() != null) {
+            if (isAllFilled()) {
                 return this;
-            } else if (!history.isEmpty()) {
-                undo();
+            } else {
+                Object solved = privateSolveUndoing(start);
+                if (solved.equals(Status.UNKNOWN)) {
+                    return Status.UNKNOWN;
+                } else if (solved != Status.UNSOLVABLE) {
+                    return solved;
+                } else if (!history.isEmpty()) {
+                    undo();
+                }
             }
         }
-        return null;
+        return Status.UNSOLVABLE;
     }
     
-    
-    
-    // ITERATOR GETTERS
-    
-    private Iterable<Cell> neighbours(final int row, final int column, final boolean inc) {
-        return new Iterable<Cell>() {
-            @Override
-            public Iterator<Cell> iterator() {
-                return new ItrNeigh(row, column, inc);
-            }
-        };
+    private Iterable<Cell> neighbours(int row, int column, boolean inc) {
+        return new SudokuIterable<Cell>(grid, size, row, column, inc,
+                SudokuIterable.NEIGHBOURS);
     }
     
-    private Iterable<Cell> square(final int row, final int column, final boolean inc) {
-        return new Iterable<Cell>() {
-            @Override
-            public Iterator<Cell> iterator() {
-                return new ItrSqr(row, column, inc);
-            }
-        };
+    private Iterable<Cell> square(int row, int column, boolean inc) {
+        return new SudokuIterable<Cell>(grid, size, row, column, inc,
+                SudokuIterable.SQUARE);
     }
     
-    private Iterable<Cell> column(final int row, final int column, final boolean inc) {
-        return new Iterable<Cell>() {
-            @Override
-            public Iterator<Cell> iterator() {
-                return new ItrCol(row, column, inc);
-            }
-        };
+    private Iterable<Cell> column(int row, int column, boolean inc) {
+        return new SudokuIterable<Cell>(grid, size, row, column, inc,
+                SudokuIterable.COLUMN);
     }
     
-    private Iterable<Cell> row(final int row, final int column, final boolean inc) {
-        return new Iterable<Cell>() {
-            @Override
-            public Iterator<Cell> iterator() {
-                return new ItrRow(row, column, inc);
-            }
-        };
+    private Iterable<Cell> row(int row, int column, boolean inc) {
+        return new SudokuIterable<Cell>(grid, size, row, column, inc,
+                SudokuIterable.ROW);
     }
     
     private Iterable<Cell> all() {
-        return new Iterable<Cell>() {
-            @Override
-            public Iterator<Cell> iterator() {
-                return new ItrAll(-1, -1, true);
-            }
-        };
-    }
-    
-    private Iterable<Cell> all(final int row, final int column, final boolean inc) {
-        return new Iterable<Cell>() {
-            @Override
-            public Iterator<Cell> iterator() {
-                return new ItrAll(row, column, inc);
-            }
-        };
-    }
-    
-    // ITERATOR CLASSES
-    
-    private class ItrAll implements Iterator<Cell> {
-        protected int i = 0, j = 0;
-        protected final int row, column;
-        private final boolean inc;
-
-        public ItrAll(int row, int column, boolean inc) {
-            this.row = row;
-            this.column = column;
-            this.inc = inc;
-        }
-
-        @Override
-        public boolean hasNext() {
-            if (!inc && i == row && j == column) {
-                increase();
-            }
-            return i < size*size && j < size*size;
-        }
-
-        @Override
-        public final Cell next() {
-            Cell x = grid[i][j];
-            increase();
-            return x;
-        }
-
-        @Override
-        public final void remove() {}
-        
-        protected void increase() {
-            j++;
-            if (j == size*size) {
-                j = 0;
-                i++;
-            }
-        }
-    }
-    
-    
-    
-    private class ItrNeigh extends ItrAll {
-        public ItrNeigh(int row, int column, boolean inc) {
-            super(row, column, inc);
-        }
-
-        @Override
-        public boolean hasNext() {
-            while (super.hasNext()) {
-                if (column / size * size <= j && j < column / size * size + size
-                        && row / size * size <= i && i < row / size * size + size) {
-                    return true; //square
-                }
-                if (i == row && (j < column / size * size || column / size * size + size <= j)) {
-                    return true; //column not in square
-                    
-                }
-                if (j == column && (i < row / size * size || row / size * size + size <= i)) {
-                    return true; //row not in square
-                }
-                increase();
-            }
-            return false;
-        }
-
-        
-    }
-    
-    
-    
-    private class ItrSqr extends ItrAll {
-        public ItrSqr(int row, int column, boolean inc) {
-            super(row, column, inc);
-            i = row / size * size;
-            j = column / size * size;
-        }
-        
-        @Override
-        public boolean hasNext() {
-            return super.hasNext() && i < row / size * size + size && j < column / size * size + size;
-        }
-        
-        @Override
-        protected void increase() {
-            j++;
-            if (j == column / size * size + size) {
-                j = column / size * size;
-                i++;
-            }
-        }
-    }
-    
-    
-    
-    private class ItrCol extends ItrAll {
-        public ItrCol(int row, int column, boolean inc) {
-            super(row, column, inc);
-            j = column;
-        }
-        
-        @Override
-        protected void increase() {
-            i++;
-        }
-    }
-    
-    
-    
-    private class ItrRow extends ItrAll {
-        public ItrRow(int row, int column, boolean inc) {
-            super(row, column, inc);
-            i = row;
-        }
-        
-        @Override
-        public boolean hasNext() {
-            return super.hasNext() && i == row;
-        }
-    }
-    
-    
-    
-    
-    
-    
-
-    
-    public static void main(String[] a) {
-        final int timeout = 2000;
-        
-        JFrame frame = new JFrame();
-        final JLabel cLabel = new JLabel("a");
-        final JLabel uLabel = new JLabel("b");
-        final JTextPane cArea = new JTextPane();
-        cArea.setContentType("text/html");
-        final JTextPane uArea = new JTextPane();
-        uArea.setContentType("text/html");
-        final JLabel testsLabel = new JLabel("c");
-        
-        frame.getContentPane().setLayout(new BorderLayout());
-        frame.getContentPane().add(new JPanel(new GridLayout(1, 2)) {
-            {
-                add(cLabel);
-                add(uLabel);
-            }
-        }, BorderLayout.NORTH);
-        frame.getContentPane().add(new JPanel(new GridLayout(1, 2)) {
-            {
-                add(new JScrollPane(cArea));
-                add(new JScrollPane(uArea));
-            }
-        }, BorderLayout.CENTER);
-        frame.getContentPane().add(testsLabel, BorderLayout.SOUTH);
-        
-        frame.pack();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setVisible(true);
-        
-        long cTotal = 0;
-        long uTotal = 0;
-        int tests = 0;
-        int cOver = 0;
-        int uOver = 0;
-        
-        while (true) {
-            Grid grid = new Grid(true, true, true, true, 4);
-
-            int i = 40;
-            Random rand = new Random();
-            int x, y, number;
-            while (i > 0) {
-                x = rand.nextInt(grid.size*grid.size);
-                y = rand.nextInt(grid.size*grid.size);
-                number = rand.nextInt(grid.size*grid.size);
-                if ((grid.grid[x][y].value() == 0) && (null == grid.isAllowed(x, y, number))) {
-                    grid.grid[x][y].setEditable(false);
-                    grid.grid[x][y].fill(number);
-                    grid.grid[x][y].poss().clear();
-                    i--;
-                }
-            }
-
-            for (Cell c : grid.all()) {
-                if (c.value() != 0) {
-                    System.out.println("grid.grid[" + c.row + "][" + c.column
-                            + "].fill(" + c.value() + ");");
-                }
-            }
-
-            System.out.println();
-            System.out.println(grid);
-
-            long cStart = System.currentTimeMillis();
-            long cEnd;
-            Grid cSolved = grid.debuggingSolvedCopy(true);
-            System.out.println(cSolved);
-            System.out.println("COPYING DONE IN: " + ((cEnd = System.currentTimeMillis()) - cStart));
-
-            System.out.println();
-
-            long uStart = System.currentTimeMillis();
-            long uEnd;
-            Grid uSolved = grid.debuggingSolvedCopy(false);
-            System.out.println(uSolved);
-            System.out.println("UNDOING DONE IN: " + ((uEnd = System.currentTimeMillis()) - uStart));
-
-            int cTime = (int) (cEnd - cStart);
-            int uTime = (int) (uEnd - uStart);
-            cTotal += cTime;
-            uTotal += uTime;
-            tests++;
-            String cString = "" + cTime;
-            String uString = "" + uTime;
-            
-            if (cTime > timeout) {
-                cString = "<font color=red><b>" + cTime + "</b></font>";
-                cOver++;
-            }
-            if (uTime > timeout) {
-                uString = "<font color=red><b>" + uTime + "</b></font>";
-                uOver++;
-            }
-            
-            String cSol = cSolved == null? "unsolvable" : "";
-            String uSol = uSolved == null? "unsolvable" : "";
-            if (!cSol.equals(uSol)) {
-                cSol = "<font color=red><b>" + cSol + "</b></font>";
-                uSol = "<font color=red><b>" + uSol + "</b></font>";
-            }
-            
-            cArea.setText(cString + " " + cSol + "\n" + cArea.getText());
-            uArea.setText(uString + " " + uSol + "\n" + uArea.getText());
-            cLabel.setText("COPY: " + (cTotal / tests) + " over: " + cOver);
-            uLabel.setText("UNDO: " + (uTotal / tests) + " over: " + uOver);
-            String time = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                    + ":" + Calendar.getInstance().get(Calendar.MINUTE)
-                    + ":" + Calendar.getInstance().get(Calendar.SECOND);
-            testsLabel.setText("TESTS: " + tests + "        TIME: " + time);
-        }
+        return new SudokuIterable<Cell>(grid, size, -1, -1, true,
+                SudokuIterable.ALL);
     }
 }
