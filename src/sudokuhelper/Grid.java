@@ -1,9 +1,17 @@
 package sudokuhelper;
 
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.awt.Point;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.Stack;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextPane;
 
 /**
  * @author Jaroslaw Pawlak
@@ -14,11 +22,12 @@ public class Grid {
     private final int size;
     private final Stack<Change> history = new Stack<Change>();
     
-    boolean autoRemovePoss = true;
+    boolean autoPossBasic = true;
+    boolean autoPossAdvanced = true;
     boolean autoFillBasic = true;
     boolean autoFillAdvanced = true;
     
-    boolean initialPoss;
+    private boolean initialPoss;
 
     private Grid(int size) {
         grid = new Cell[size*size][size*size];
@@ -27,7 +36,7 @@ public class Grid {
     
     private Grid(boolean autoRemovePoss, boolean autoFillBasic,
             boolean autoFillAdvanced, boolean initialPoss, int size) {
-        this.autoRemovePoss = autoRemovePoss;
+        this.autoPossBasic = autoRemovePoss;
         this.autoFillBasic = autoFillBasic;
         this.autoFillAdvanced = autoFillAdvanced;
         this.initialPoss = initialPoss;
@@ -62,10 +71,10 @@ public class Grid {
                     i--;
                 }
             }
-            
+
             
             if (g.solvedCopy() == null) {
-                System.out.println("generated invalid puzzle");
+                Debug.println("generated invalid puzzle", Debug.GENERATION);
                 continue;
             }
             
@@ -87,6 +96,7 @@ public class Grid {
      * Return true if stack was not empty and GUI requires repainting.
      */
     public boolean undo() {
+        Debug.println("call: undo()", Debug.METHOD_CALL);
         if (history.isEmpty()) {
             return false;
         }
@@ -99,6 +109,7 @@ public class Grid {
                 case Change.POSS_REM: grid[c.x][c.y].poss().remove(c.number); break;
             }
             if (c.last) {
+                Debug.println("\treturn: " + c, Debug.METHOD_CALL);
                 return true;
             }
         }
@@ -119,7 +130,7 @@ public class Grid {
                 if (grid[i][j].value() == 0) {
                     grid[i][j].fill(solved.grid[i][j].value());
                     history.add(new Change(i, j, 0, Change.NORMAL, false));
-                    if (autoRemovePoss) {
+                    if (autoPossBasic) {
                         for (int n : grid[i][j].poss()) {
                             grid[i][j].poss().remove(n);
                             history.add(new Change(i, j, n, Change.POSS_ADD, false));
@@ -244,6 +255,8 @@ public class Grid {
     }
     
     private void fill(int row, int column, int number, boolean user) {
+        Debug.println("call: fill(" + row + ", " + column + ", " + number
+                + ", " + user + ")", Debug.METHOD_CALL);
         if (!grid[row][column].isEditable()) {
             return;
         }
@@ -258,7 +271,8 @@ public class Grid {
     }
     
     private void fillAll() {
-        if (autoRemovePoss) {
+        Debug.println("call: fillAll()", Debug.METHOD_CALL);
+        if (autoPossBasic) {
             for (Cell cell : all()) {
                 for (int n : cell.poss()) {
                     if (!isAllowed(cell, n) || cell.value() != 0) {
@@ -270,14 +284,82 @@ public class Grid {
             }
         }
         
+        if (autoPossAdvanced) {
+            for (Cell cell : all()) {
+                //rows
+                int x = 1;
+                for (Cell otherCell : row(cell.row, cell.column, false)) {
+                    if (cell.poss().equals(otherCell.poss())) {
+                        x++;
+                    }
+                }
+                if (cell.poss().size() == x) {
+                    for (Cell otherCell : row(cell.row, cell.column, false)) {
+                        if (!cell.poss().equals(otherCell.poss())) {
+                            for (int n : cell.poss()) {
+                                if (otherCell.poss().contains(n)) {
+                                    history.add(new Change(otherCell.row, otherCell.column,
+                                            n, Change.POSS_ADD, false));
+                                    otherCell.poss().remove(n);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                //columns
+                x = 1;
+                for (Cell otherCell : column(cell.row, cell.column, false)) {
+                    if (cell.poss().equals(otherCell.poss())) {
+                        x++;
+                    }
+                }
+                if (cell.poss().size() == x) {
+                    for (Cell otherCell : column(cell.row, cell.column, false)) {
+                        if (!cell.poss().equals(otherCell.poss())) {
+                            for (int n : cell.poss()) {
+                                if (otherCell.poss().contains(n)) {
+                                    history.add(new Change(otherCell.row, otherCell.column,
+                                            n, Change.POSS_ADD, false));
+                                    otherCell.poss().remove(n);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                //squares
+                x = 1;
+                for (Cell otherCell : square(cell.row, cell.column, false)) {
+                    if (cell.poss().equals(otherCell.poss())) {
+                        x++;
+                    }
+                }
+                if (cell.poss().size() == x) {
+                    for (Cell otherCell : square(cell.row, cell.column, false)) {
+                        if (!cell.poss().equals(otherCell.poss())) {
+                            for (int n : cell.poss()) {
+                                if (otherCell.poss().contains(n)) {
+                                    history.add(new Change(otherCell.row, otherCell.column,
+                                            n, Change.POSS_ADD, false));
+                                    otherCell.poss().remove(n);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+            }
+        }
+        
         if (autoFillBasic) {
             for (Cell cell : all()) {
                 if (cell.value() != 0) {
                     continue;
                 }
                 if (cell.poss().size() == 1) {
-                    if (isAllowed(cell, cell.poss().get())) {
-                        fill(cell.row, cell.column, cell.poss().get(), false);
+                    if (isAllowed(cell, cell.poss().getFirst())) {
+                        fill(cell.row, cell.column, cell.poss().getFirst(), false);
                         return;
                     }
                 }
@@ -290,6 +372,7 @@ public class Grid {
                     continue;
                 }
                 for (int n : cell.poss()) {
+                    //rows
                     boolean possibleSomewhereElse = false;
                     for (Cell otherCell : row(cell.row, cell.column, false)) {
                         if (otherCell.value() == 0 && otherCell.poss().contains(n)) {
@@ -298,11 +381,12 @@ public class Grid {
                         }
                     }
                     if (!possibleSomewhereElse) {
-                        if (isAllowed(cell, cell.poss().get())) {
+                        if (isAllowed(cell, cell.poss().getFirst())) {
                             fill(cell.row, cell.column, n, false);
                             return;
                         }
                     }
+                    //columns
                     possibleSomewhereElse = false;
                     for (Cell otherCell : column(cell.row, cell.column, false)) {
                         if (otherCell.value() == 0 && otherCell.poss().contains(n)) {
@@ -311,11 +395,12 @@ public class Grid {
                         }
                     }
                     if (!possibleSomewhereElse) {
-                        if (isAllowed(cell, cell.poss().get())) {
+                        if (isAllowed(cell, cell.poss().getFirst())) {
                             fill(cell.row, cell.column, n, false);
                             return;
                         }
                     }
+                    //squares
                     possibleSomewhereElse = false;
                     for (Cell otherCell : square(cell.row, cell.column, false)) {
                         if (otherCell.value() == 0 && otherCell.poss().contains(n)) {
@@ -324,7 +409,7 @@ public class Grid {
                         }
                     }
                     if (!possibleSomewhereElse) {
-                        if (isAllowed(cell, cell.poss().get())) {
+                        if (isAllowed(cell, cell.poss().getFirst())) {
                             fill(cell.row, cell.column, n, false);
                             return;
                         }
@@ -339,13 +424,18 @@ public class Grid {
         String r = "";
         for (int i = 0; i < size*size; i++) {
             for (int j = 0; j < size*size; j++) {
-                r += grid[i][j].value();
+                r += grid[i][j].value() + " ";
             }
             r += "\n";
         }
         return r;
     }
     
+    
+    /**
+     * Makes a copy of a grid - only values and possibilities are copied.
+     * History is discarded. Solving options are set to default.
+     */
     public Grid copy() {
         Grid r = new Grid(size);
         for (int i = 0; i < size*size; i++) {
@@ -357,6 +447,7 @@ public class Grid {
     }
     
     public boolean isAllFilled() {
+        Debug.println("call: isAllFilled()", Debug.METHOD_CALL);
         for (Cell cell : all()) {
             if (cell.value() == 0) {
                 return false;
@@ -381,21 +472,37 @@ public class Grid {
             }
         }
         
-        //fill what you can
-        gridCopy.fillAll();
-        if (gridCopy.isAllFilled()) {
-            return gridCopy;
-        }
-        gridCopy.history.clear();
+//        return gridCopy.privateSolveCopying();
+        return gridCopy.privateSolveUndoing();
+    }
+    
+    private Grid debuggingSolvedCopy(boolean copying) {
+        Grid gridCopy = this.copy();
         
-        if (gridCopy.privateSolve()) {
-            return gridCopy;
+        //fill poss
+        for (Cell cell : gridCopy.all()) {
+            cell.poss().addAll();
+            for (Cell neighbour : gridCopy.neighbours(cell.row, cell.column, false)) {
+                if (neighbour.value() != 0) {
+                    cell.poss().remove(neighbour.value());
+                }
+            }
+        }
+        
+        if (copying) {
+            return gridCopy.privateSolveCopying();
         } else {
-            return null;
+            return gridCopy.privateSolveUndoing();
         }
     }
     
-    private boolean privateSolve() {
+    private Grid privateSolveCopying() {
+        Debug.println("call: privateSolveCopying()", Debug.METHOD_CALL);
+        this.fillAll();
+        if (this.isAllFilled()) {
+            return this;
+        }
+        
         //check if there exists such a zone and such a number that there is no
         //cell in this zone where the number can be inserted
         boolean contains = false;
@@ -409,7 +516,7 @@ public class Grid {
                     }
                 }
                 if (!contains) {
-                    return false;
+                    return null;
                 }
             }
             for (int i = 0; i < size*size; i++) {
@@ -421,7 +528,7 @@ public class Grid {
                     }
                 }
                 if (!contains) {
-                    return false;
+                    return null;
                 }
             }
             for (int i = 0; i < size*size; i += size) {
@@ -434,7 +541,7 @@ public class Grid {
                         }
                     }
                     if (!contains) {
-                        return false;
+                        return null;
                     }
                 }
             }
@@ -444,23 +551,101 @@ public class Grid {
         Cell emptyCell = null;
         for (Cell cell : all()) {
             if (cell.value() == 0) {
-                emptyCell = cell;
-                break;
+                if (cell.poss().isEmpty()) {
+                    return null;
+                } else if (emptyCell == null || cell.poss().size()
+                        < emptyCell.poss().size()) {
+                    emptyCell = cell;
+                    if (emptyCell.poss().size() == 2) {
+                        break;
+                    }
+                }
             }
         }
         
         for (int n : emptyCell.poss()) {
-            history.add(new Change(emptyCell.row, emptyCell.column,
-                    0, Change.NORMAL, true));
-            emptyCell.fill(n);
-            fillAll();
-            if (isAllFilled() || privateSolve()) {
-                return true;
+            Grid gridCopy = this.copy();
+            gridCopy.fill(emptyCell.row, emptyCell.column, n, true);
+            Grid gridSolved = gridCopy.privateSolveCopying();
+            if (gridSolved != null) {
+                return gridSolved;
+            }
+        }
+        return null;
+    }
+    
+    private Grid privateSolveUndoing() {
+        Debug.println("call: privateSolveUndoing()", Debug.METHOD_CALL);
+        
+        //check if there exists such a zone and such a number that there is no
+        //cell in this zone where the number can be inserted
+        boolean contains = false;
+        for (int n = 1; n <= size*size; n++) {
+            for (int i = 0; i < size*size; i++) {
+                contains = false;
+                for (Cell cell : row(i, -1, true)) {
+                    if (cell.poss().contains(n) || cell.value() == n) {
+                        contains = true;
+                        break;
+                    }
+                }
+                if (!contains) {
+                    return null;
+                }
+            }
+            for (int i = 0; i < size*size; i++) {
+                contains = false;
+                for (Cell cell : column(-1, i, true)) {
+                    if (cell.poss().contains(n) || cell.value() == n) {
+                        contains = true;
+                        break;
+                    }
+                }
+                if (!contains) {
+                    return null;
+                }
+            }
+            for (int i = 0; i < size*size; i += size) {
+                for (int j = 0; j < size*size; j += size) {
+                    contains = false;
+                    for (Cell cell : square(i, j, true)) {
+                        if (cell.poss().contains(n) || cell.value() == n) {
+                            contains = true;
+                            break;
+                        }
+                    }
+                    if (!contains) {
+                        return null;
+                    }
+                }
+            }
+        }
+        
+        //find an empty cell
+        Cell emptyCell = null;
+        for (Cell cell : all()) {
+            if (cell.value() == 0) {
+                if (cell.poss().isEmpty()) {
+                    return null;
+                } else if (emptyCell == null || cell.poss().size()
+                        < emptyCell.poss().size()) {
+                    emptyCell = cell;
+                    if (emptyCell.poss().size() == 2) {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        for (int n : emptyCell.poss()) {
+            fill(emptyCell.row, emptyCell.column, n, true);
+            if (isAllFilled() || privateSolveUndoing() != null) {
+                return this;
             } else if (!history.isEmpty()) {
                 undo();
             }
         }
-        return false;
+        return null;
     }
     
     
@@ -639,6 +824,127 @@ public class Grid {
         @Override
         public boolean hasNext() {
             return super.hasNext() && i == row;
+        }
+    }
+    
+    
+    
+    
+    
+    
+
+    
+    public static void main(String[] a) {
+        final int timeout = 2000;
+        
+        JFrame frame = new JFrame();
+        final JLabel cLabel = new JLabel("a");
+        final JLabel uLabel = new JLabel("b");
+        final JTextPane cArea = new JTextPane();
+        cArea.setContentType("text/html");
+        final JTextPane uArea = new JTextPane();
+        uArea.setContentType("text/html");
+        final JLabel testsLabel = new JLabel("c");
+        
+        frame.getContentPane().setLayout(new BorderLayout());
+        frame.getContentPane().add(new JPanel(new GridLayout(1, 2)) {
+            {
+                add(cLabel);
+                add(uLabel);
+            }
+        }, BorderLayout.NORTH);
+        frame.getContentPane().add(new JPanel(new GridLayout(1, 2)) {
+            {
+                add(new JScrollPane(cArea));
+                add(new JScrollPane(uArea));
+            }
+        }, BorderLayout.CENTER);
+        frame.getContentPane().add(testsLabel, BorderLayout.SOUTH);
+        
+        frame.pack();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+        
+        long cTotal = 0;
+        long uTotal = 0;
+        int tests = 0;
+        int cOver = 0;
+        int uOver = 0;
+        
+        while (true) {
+            Grid grid = new Grid(true, true, true, true, 4);
+
+            int i = 40;
+            Random rand = new Random();
+            int x, y, number;
+            while (i > 0) {
+                x = rand.nextInt(grid.size*grid.size);
+                y = rand.nextInt(grid.size*grid.size);
+                number = rand.nextInt(grid.size*grid.size);
+                if ((grid.grid[x][y].value() == 0) && (null == grid.isAllowed(x, y, number))) {
+                    grid.grid[x][y].setEditable(false);
+                    grid.grid[x][y].fill(number);
+                    grid.grid[x][y].poss().clear();
+                    i--;
+                }
+            }
+
+            for (Cell c : grid.all()) {
+                if (c.value() != 0) {
+                    System.out.println("grid.grid[" + c.row + "][" + c.column
+                            + "].fill(" + c.value() + ");");
+                }
+            }
+
+            System.out.println();
+            System.out.println(grid);
+
+            long cStart = System.currentTimeMillis();
+            long cEnd;
+            Grid cSolved = grid.debuggingSolvedCopy(true);
+            System.out.println(cSolved);
+            System.out.println("COPYING DONE IN: " + ((cEnd = System.currentTimeMillis()) - cStart));
+
+            System.out.println();
+
+            long uStart = System.currentTimeMillis();
+            long uEnd;
+            Grid uSolved = grid.debuggingSolvedCopy(false);
+            System.out.println(uSolved);
+            System.out.println("UNDOING DONE IN: " + ((uEnd = System.currentTimeMillis()) - uStart));
+
+            int cTime = (int) (cEnd - cStart);
+            int uTime = (int) (uEnd - uStart);
+            cTotal += cTime;
+            uTotal += uTime;
+            tests++;
+            String cString = "" + cTime;
+            String uString = "" + uTime;
+            
+            if (cTime > timeout) {
+                cString = "<font color=red><b>" + cTime + "</b></font>";
+                cOver++;
+            }
+            if (uTime > timeout) {
+                uString = "<font color=red><b>" + uTime + "</b></font>";
+                uOver++;
+            }
+            
+            String cSol = cSolved == null? "unsolvable" : "";
+            String uSol = uSolved == null? "unsolvable" : "";
+            if (!cSol.equals(uSol)) {
+                cSol = "<font color=red><b>" + cSol + "</b></font>";
+                uSol = "<font color=red><b>" + uSol + "</b></font>";
+            }
+            
+            cArea.setText(cString + " " + cSol + "\n" + cArea.getText());
+            uArea.setText(uString + " " + uSol + "\n" + uArea.getText());
+            cLabel.setText("COPY: " + (cTotal / tests) + " over: " + cOver);
+            uLabel.setText("UNDO: " + (uTotal / tests) + " over: " + uOver);
+            String time = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                    + ":" + Calendar.getInstance().get(Calendar.MINUTE)
+                    + ":" + Calendar.getInstance().get(Calendar.SECOND);
+            testsLabel.setText("TESTS: " + tests + "        TIME: " + time);
         }
     }
 }

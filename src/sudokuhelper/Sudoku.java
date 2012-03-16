@@ -297,7 +297,7 @@ public class Sudoku extends JPanel {
     }
     
     public void setAutoRemovePoss(boolean c) {
-        grid.autoRemovePoss = c;
+        grid.autoPossBasic = c;
     }
     
     public void setAutoFillBasic(boolean c) {

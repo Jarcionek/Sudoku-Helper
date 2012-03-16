@@ -1,5 +1,2 @@
 A sudoku game/solver.
-In a game mode it can help the user
-by removing possibilites that are no
-longer valid or by filling in
-the easiest numbers.
+In a game mode it can help the user by removing possibilites that are no longer valid or by filling in the easiest numbers.

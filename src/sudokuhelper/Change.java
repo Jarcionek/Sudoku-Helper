@@ -25,4 +25,12 @@ public class Change {
     public static Change marker() {
         return new Change(-1, -1, -1, -1, true);
     }
+
+    @Override
+    public String toString() {
+        return "Change{" + "x=" + x + ", y=" + y + ", number=" + number
+                + ", operation=" + operation + ", last=" + last + '}';
+    }
+    
+    
 }
