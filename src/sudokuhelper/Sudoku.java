@@ -5,12 +5,16 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
@@ -53,7 +57,7 @@ public class Sudoku extends JPanel {
     public Sudoku(boolean autoPossBasic, boolean autoPossAdvanced,
             boolean autoFillBasic, boolean autoFillAdvanced, boolean possAsNum,
             boolean initialPoss, int initNumbers, int size,
-            final MouseListenerMethod m) {
+            final MouseListenerMethod m, int difficulty) {
         super(new GridBagLayout());
         this.size = size;
         this.selectedRow = size*size / 2;
@@ -61,8 +65,15 @@ public class Sudoku extends JPanel {
         this.errorRow = size*size / 2;
         this.errorColumn = size*size / 2;
         this.possAsNum = possAsNum;
-        this.grid = Grid.generate(autoPossBasic, autoPossAdvanced,
-                autoFillBasic, autoFillAdvanced, initialPoss, initNumbers, size);
+        if (difficulty == Grid.DIFFICULTY_NONE) {
+            this.grid = Grid.generate(autoPossBasic, autoPossAdvanced,
+                    autoFillBasic, autoFillAdvanced, initialPoss,
+                    initNumbers, size);
+        } else {
+            this.grid = Grid.uniqueGen(autoPossBasic, autoPossAdvanced,
+                    autoFillBasic, autoFillAdvanced, initialPoss,
+                    difficulty, size);
+        }
         this.label = new JLabel[size*size][size*size];
         this.containsValue = new boolean[size*size][size*size];
         
@@ -106,6 +117,10 @@ public class Sudoku extends JPanel {
         
         select(selectedRow, selectedColumn);
         refresh();
+    }
+    
+    public int getDifficulty() {
+        return grid.getDifficulty();
     }
     
     public int getSudokuSize() {
@@ -298,11 +313,24 @@ public class Sudoku extends JPanel {
         }
     }
     
-    public void setAutoRemovePossBasic(boolean c) {
+    /**
+     * @return false if hint was not available. True otherwise.
+     */
+    public boolean hint() {
+        final Cell c = grid.hint();
+        if (c == null) {
+            return false;
+        }
+        select(c.row, c.column);
+        fillSelected(c.value());
+        return true;
+    }
+    
+    public void setAutoPossBasic(boolean c) {
         grid.autoPossBasic = c;
     }
     
-    public void setAutoRemovePossAdvanced(boolean c) {
+    public void setAutoPossAdvanced(boolean c) {
         grid.autoPossAdvanced = c;
     }
     

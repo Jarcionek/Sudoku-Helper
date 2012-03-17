@@ -35,6 +35,9 @@ public class Cell {
         this.editable = editable;
     }
     
+    /**
+     * Returns the previous value.
+     */
     public int clear() {
         int number = value;
         value = 0;

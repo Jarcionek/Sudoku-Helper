@@ -2,10 +2,12 @@ package sudokuhelper;
 
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -19,9 +21,8 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
+import javax.swing.JSeparator;
 import javax.swing.JSlider;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 
 /**
  * @author Jaroslaw Pawlak
@@ -30,15 +31,23 @@ public class MainFrame extends JFrame {
     private final NewSudokuChoicePanel newSudokuChoices;
     private final MouseListenerMethod m;
     
-    private final JMenuItem newMenuItem;
+    private final JMenuItem easyGameMenuItem;
+    private final JMenuItem mediumGameMenuItem;
+    private final JMenuItem hardGameMenuItem;
+    private final JMenuItem customMenuItem;
     private final JMenuItem solveMenuItem;
     private final JMenuItem validateMenuItem;
+    private final JMenuItem hintMenuItem;
     private final JMenuItem resetMenuItem;
     private final JMenuItem exitMenuItem;
     private final JSlider autoFillSlider;
-    private final JMenuItem fillPoss;
+    private final JMenuItem fillPossMenuItem;
     private final JSlider autoPossSlider;
     private final JCheckBox possAsNumStyle;
+    private final JMenuItem easyScoresMenuItem;
+    private final JMenuItem mediumScoresMenuItem;
+    private final JMenuItem hardScoresMenuItem;
+    private final JMenuItem extremeScoresMenuItem;
     private final JMenuItem aboutMenuItem;
     private final JMenuItem keysMenuItem;   
     private final JLabel possLabel;
@@ -49,8 +58,10 @@ public class MainFrame extends JFrame {
     private Sudoku sudoku;
     private boolean possMode = false;
     
+    private boolean cheating = true;
+    
     public MainFrame() {
-        super("Sudoku Helper " + Main.VERSION);
+        super(Main.NAME + " " + Main.VERSION);
         
         newSudokuChoices = new NewSudokuChoicePanel();
         m = new MouseListenerMethod() {
@@ -58,23 +69,26 @@ public class MainFrame extends JFrame {
             public void exec(MouseEvent e) {
                 MainFrame.this.requestFocusInWindow();
                 resetLabels();
-
-                //TODO temporary code below
-                if (e.getButton() == MouseEvent.BUTTON3) {
-                    sudoku.refresh();
-                }
             }
         };
-        
-        newMenuItem = new JMenuItem("New");
+
+        easyGameMenuItem = new JMenuItem("Easy");
+        mediumGameMenuItem = new JMenuItem("Medium");
+        hardGameMenuItem = new JMenuItem("Hard");
+        customMenuItem = new JMenuItem("Custom");
         solveMenuItem = new JMenuItem("Solve");
         validateMenuItem = new JMenuItem("Validate");
+        hintMenuItem = new JMenuItem("Hint");
         resetMenuItem = new JMenuItem("Reset");
         exitMenuItem = new JMenuItem("Exit");
         autoFillSlider = new JSlider(0, 2, 1);
-        fillPoss = new JMenuItem("Fill all");
+        fillPossMenuItem = new JMenuItem("Fill all");
         autoPossSlider = new JSlider(0, 2, 1);
-        possAsNumStyle = new JCheckBox("Numpad style", true);
+        possAsNumStyle = new JCheckBox("Numpad style", false);
+        easyScoresMenuItem = new JMenuItem("Easy");
+        mediumScoresMenuItem = new JMenuItem("Medium");
+        hardScoresMenuItem = new JMenuItem("Hard");
+        extremeScoresMenuItem = new JMenuItem("Extreme");
         aboutMenuItem = new JMenuItem("About");
         keysMenuItem = new JMenuItem("Keys");        
         possLabel = new JLabel("");        
@@ -87,7 +101,8 @@ public class MainFrame extends JFrame {
                 autoPossSlider.getValue() >= 2,
                 autoFillSlider.getValue() >= 1,
                 autoFillSlider.getValue() >= 2,
-                possAsNumStyle.isSelected(), false, 15, 3, m);
+                possAsNumStyle.isSelected(), false, 15, 3, m,
+                Grid.DIFFICULTY_NONE);
         setContentPane(new JScrollPane(sudoku));
         resetLabels();
         stopwatchLabel.start();
@@ -174,17 +189,44 @@ public class MainFrame extends JFrame {
                 sudoku.refresh();
                 if (possMode) {
                     sudoku.possChange(n);
-                } else {
-                    if (sudoku.isAllowed(n)) {
-                        sudoku.fillSelected(n);
-                        if (sudoku.isAllFilled() && !stopwatchLabel.isStopped()) {
-                            stopwatchLabel.stop();
-                            JOptionPane.showMessageDialog(MainFrame.this,
-                                    "<html><font size=5 color=green>"
-                                    + "Congratulations! You solved it!<br>"
-                                    + "</font><font size=5>"
-                                    + "Your time: " + stopwatchLabel.getText()
-                                    + "</font></html>",
+                } else if (sudoku.isAllowed(n)) {
+                    sudoku.fillSelected(n);
+                    if (sudoku.isAllFilled() && !stopwatchLabel.isStopped()) {
+                        stopwatchLabel.stop();
+                        boolean askForName = false;
+                        String msg = "<html><font size=5>";
+                        if (cheating) {
+                            if (sudoku.getDifficulty() != Grid.DIFFICULTY_NONE) {
+                                msg += "Cheater!<br>";
+                            }
+                        } else {
+                            if (Scores.isBestResult(sudoku.getDifficulty(),
+                                    stopwatchLabel.getTime())) {
+                                askForName = true;
+                                msg += "<font color=green>Best result!</font><br>";
+                            } else {
+                                msg += "<font color=green>Congratulations! "
+                                        + "You solved it!</font><br>";
+                            }
+                        }
+                        msg += "Your time: " + stopwatchLabel.getText();
+                        msg += "</font></html>";
+                        if (askForName) {
+                            String name = (String) JOptionPane.showInputDialog(
+                                    MainFrame.this, msg,
+                                    MainFrame.this.getTitle(),
+                                    JOptionPane.PLAIN_MESSAGE,
+                                    null, null, System.getProperty("user.name"));
+                            if (name == null || name.equals("")) {
+                                name = System.getProperty("user.name");
+                            }
+                            if (name.length() > 30) {
+                                name = name.substring(0, 30);
+                            }
+                            Scores.addScore(sudoku.getDifficulty(), name,
+                                   stopwatchLabel.getTime());
+                        } else {
+                            JOptionPane.showMessageDialog(MainFrame.this, msg,
                                     MainFrame.this.getTitle(),
                                     JOptionPane.PLAIN_MESSAGE);
                         }
@@ -204,6 +246,12 @@ public class MainFrame extends JFrame {
         pack();
 //        setResizable(false);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        
+        //center
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        setLocation((screen.width - getWidth()) / 2,
+                    (screen.height - getHeight()) / 2);
+        
         setVisible(true);
     }
     
@@ -218,19 +266,53 @@ public class MainFrame extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         
         JMenu sudokuMenu = new JMenu("Sudoku");
+        sudokuMenu.setMnemonic(KeyEvent.VK_S);
+        JMenu newMenu = new JMenu("New");
+        newMenu.setMnemonic(KeyEvent.VK_N);
         JMenu settingsMenu = new JMenu("Settings");
-        JMenu autosolvingMenu = new JMenu("Solver");
-        JMenu autoPoss = new JMenu("Auto remove");
+        settingsMenu.setMnemonic(KeyEvent.VK_T);
+        JMenu autoSolvingMenu = new JMenu("Solver");
         JMenu suggestionsMenu = new JMenu("Suggestions");
+        suggestionsMenu.setMnemonic(KeyEvent.VK_S);
+        JMenu autoPossMenu = new JMenu("Auto remove");
+        JMenu scoresMenu = new JMenu("Scores");
+        scoresMenu.setMnemonic(KeyEvent.VK_C);
         JMenu helpMenu = new JMenu("Help");
+        helpMenu.setMnemonic(KeyEvent.VK_H);
 
-        newMenuItem.addActionListener(new ActionListener() {
+        easyGameMenuItem.setMnemonic(KeyEvent.VK_E);
+        easyGameMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                actionNewSudoku();
+                actionNewSudoku(Grid.DIFFICULTY_EASY);
+            }
+        });
+        
+        mediumGameMenuItem.setMnemonic(KeyEvent.VK_M);
+        mediumGameMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionNewSudoku(Grid.DIFFICULTY_MEDIUM);
+            }
+        });
+        
+        hardGameMenuItem.setMnemonic(KeyEvent.VK_H);
+        hardGameMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionNewSudoku(Grid.DIFFICULTY_HARD);
+            }
+        });
+        
+        customMenuItem.setMnemonic(KeyEvent.VK_C);
+        customMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionNewSudoku(Grid.DIFFICULTY_NONE);
             }
         });
 
+        solveMenuItem.setMnemonic(KeyEvent.VK_S);
         solveMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -238,22 +320,46 @@ public class MainFrame extends JFrame {
             }
         });
         
+        validateMenuItem.setMnemonic(KeyEvent.VK_V);
         validateMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                actionValidate();
+                if (MainFrame.this.cheatingConfirmed()) {
+                    actionValidate();
+                }
             }
         });
         
+        hintMenuItem.setMnemonic(KeyEvent.VK_H);
+        hintMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (MainFrame.this.cheatingConfirmed()) {
+                    if (!sudoku.hint()) {
+                        JOptionPane.showMessageDialog(MainFrame.this,
+                                "<html><font size=5 color=red>"
+                                + "Hint unavailable"
+                                + "</font></html>",
+                                MainFrame.this.getTitle(),
+                                JOptionPane.PLAIN_MESSAGE);
+                    }
+                }
+            }
+        });
+        
+        resetMenuItem.setMnemonic(KeyEvent.VK_R);
         resetMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                sudoku.reset();
-                resetLabels();
-                stopwatchLabel.start();
+                if (MainFrame.this.cheatingConfirmed()) {
+                    sudoku.reset();
+                    resetLabels();
+                    stopwatchLabel.start();
+                }
             }
         });
         
+        exitMenuItem.setMnemonic(KeyEvent.VK_E);
         exitMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -264,44 +370,60 @@ public class MainFrame extends JFrame {
         autoFillSlider.setPaintLabels(true);
         autoFillSlider.setLabelTable(new Hashtable() {
             {
-                put(0, new JLabel("off"));
-                put(1, new JLabel("basic"));
-                put(2, new JLabel("advanced"));
+                put(0, new JLabel("Off"));
+                put(1, new JLabel("Basic"));
+                put(2, new JLabel("Advanced"));
             }
         });
-        autoFillSlider.addChangeListener(new ChangeListener() {
+        autoFillSlider.setFocusable(false);
+        autoFillSlider.addMouseListener(new MouseAdapter() {
             @Override
-            public void stateChanged(ChangeEvent e) {
-                sudoku.setAutoFillBasic(autoFillSlider.getValue() >= 1);
-                sudoku.setAutoFillAdvanced(autoFillSlider.getValue() >= 2);
+            public void mouseReleased(MouseEvent e) {
+                if (autoFillSlider.getValue() > 0
+                        && MainFrame.this.cheatingConfirmed()) {
+                    sudoku.setAutoFillBasic(autoFillSlider.getValue() >= 1);
+                    sudoku.setAutoFillAdvanced(autoFillSlider.getValue() >= 2);
+                } else {
+                    autoFillSlider.setValue(0);
+                }
             }
         });
         
-        fillPoss.addActionListener(new ActionListener() {
+        fillPossMenuItem.setMnemonic(KeyEvent.VK_F);
+        fillPossMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                sudoku.fillSuggestions();
-                sudoku.refresh();
-                resetLabels();
+                if (MainFrame.this.cheatingConfirmed()) {
+                    sudoku.fillSuggestions();
+                    sudoku.refresh();
+                    resetLabels();
+                }
             }
         });
         
         autoPossSlider.setPaintLabels(true);
         autoPossSlider.setLabelTable(new Hashtable() {
             {
-                put(0, new JLabel("off"));
-                put(1, new JLabel("basic"));
-                put(2, new JLabel("advanced"));
+                put(0, new JMenu("Off"));
+                put(1, new JLabel("Basic"));
+                put(2, new JLabel("Advanced"));
             }
         });
-        autoPossSlider.addChangeListener(new ChangeListener() {
+        autoPossSlider.setFocusable(false);
+        autoPossSlider.addMouseListener(new MouseAdapter() {
             @Override
-            public void stateChanged(ChangeEvent e) {
-                sudoku.setAutoRemovePossBasic(autoPossSlider.getValue() >= 1);
-                sudoku.setAutoRemovePossAdvanced(autoPossSlider.getValue() >= 2);
+            public void mouseReleased(MouseEvent e) {
+                if (autoPossSlider.getValue() > 0
+                        && MainFrame.this.cheatingConfirmed()) {
+                    sudoku.setAutoPossBasic(autoPossSlider.getValue() >= 1);
+                    sudoku.setAutoPossAdvanced(autoPossSlider.getValue() >= 2);
+                } else {
+                    autoPossSlider.setValue(0);
+                }
             }
         });
         
+        possAsNumStyle.setMnemonic(KeyEvent.VK_N);
         possAsNumStyle.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -310,6 +432,39 @@ public class MainFrame extends JFrame {
             }
         });
         
+        easyScoresMenuItem.setMnemonic(KeyEvent.VK_E);
+        easyScoresMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionShowScores(Grid.DIFFICULTY_EASY);
+            }
+        });
+        
+        mediumScoresMenuItem.setMnemonic(KeyEvent.VK_M);
+        mediumScoresMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionShowScores(Grid.DIFFICULTY_MEDIUM);
+            }
+        });
+        
+        hardScoresMenuItem.setMnemonic(KeyEvent.VK_H);
+        hardScoresMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionShowScores(Grid.DIFFICULTY_HARD);
+            }
+        });
+        
+        extremeScoresMenuItem.setMnemonic(KeyEvent.VK_X);
+        extremeScoresMenuItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                actionShowScores(Grid.DIFFICULTY_EXTREME);
+            }
+        });
+        
+        aboutMenuItem.setMnemonic(KeyEvent.VK_A);
         aboutMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -317,6 +472,7 @@ public class MainFrame extends JFrame {
             }
         });
         
+        keysMenuItem.setMnemonic(KeyEvent.VK_K);
         keysMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -334,19 +490,30 @@ public class MainFrame extends JFrame {
 
         setJMenuBar(menuBar);
             menuBar.add(sudokuMenu);
-                sudokuMenu.add(newMenuItem);
+                sudokuMenu.add(newMenu);
+                    newMenu.add(easyGameMenuItem);
+                    newMenu.add(mediumGameMenuItem);
+                    newMenu.add(hardGameMenuItem);
+                    newMenu.add(new JSeparator());
+                    newMenu.add(customMenuItem);
                 sudokuMenu.add(solveMenuItem);
                 sudokuMenu.add(validateMenuItem);
+                sudokuMenu.add(hintMenuItem);
                 sudokuMenu.add(resetMenuItem);
                 sudokuMenu.add(exitMenuItem);
             menuBar.add(settingsMenu);
-                settingsMenu.add(autosolvingMenu);
-                    autosolvingMenu.add(autoFillSlider);
+                settingsMenu.add(autoSolvingMenu);
+                    autoSolvingMenu.add(autoFillSlider);
                 settingsMenu.add(suggestionsMenu);
-                    suggestionsMenu.add(autoPoss);
-                        autoPoss.add(autoPossSlider);
+                    suggestionsMenu.add(autoPossMenu);
+                        autoPossMenu.add(autoPossSlider);
                     suggestionsMenu.add(possAsNumStyle);
-                    suggestionsMenu.add(fillPoss);
+                    suggestionsMenu.add(fillPossMenuItem);
+            menuBar.add(scoresMenu);
+                scoresMenu.add(easyScoresMenuItem);
+                scoresMenu.add(mediumScoresMenuItem);
+                scoresMenu.add(hardScoresMenuItem);
+//                scoresMenu.add(extremeScoresMenuItem); //TODO extreme difficulty
             menuBar.add(helpMenu);
                 helpMenu.add(aboutMenuItem);
                 helpMenu.add(keysMenuItem);
@@ -359,26 +526,41 @@ public class MainFrame extends JFrame {
             menuBar.add(Box.createHorizontalStrut(5));
     }
     
-    private void actionNewSudoku() {
-        Object[] options = new String[] {"Create", "Cancel"};
-        int choice = JOptionPane.showOptionDialog(this, newSudokuChoices,
-                this.getTitle(), JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-        if (choice == JOptionPane.OK_OPTION) {
-            sudoku = new Sudoku(autoPossSlider.getValue() >= 1,
-                    autoPossSlider.getValue() >= 2,
-                    autoFillSlider.getValue() >= 1,
-                    autoFillSlider.getValue() >= 2,
-                    possAsNumStyle.isSelected(), newSudokuChoices.getFillPoss(),
-                    newSudokuChoices.getInitialNumbers(),
-                    newSudokuChoices.getSudokuSize(), m);
+    private void actionNewSudoku(int difficulty) {
+        if (difficulty == Grid.DIFFICULTY_NONE) {
+            Object[] options = new String[] {"Create", "Cancel"};
+            int choice = JOptionPane.showOptionDialog(this, newSudokuChoices,
+                    this.getTitle(), JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+            if (choice == JOptionPane.OK_OPTION) {
+                cheating = true;
+                sudoku = new Sudoku(autoPossSlider.getValue() >= 1,
+                        autoPossSlider.getValue() >= 2,
+                        autoFillSlider.getValue() >= 1,
+                        autoFillSlider.getValue() >= 2,
+                        possAsNumStyle.isSelected(),
+                        newSudokuChoices.getFillPoss(),
+                        newSudokuChoices.getInitialNumbers(),
+                        newSudokuChoices.getSudokuSize(), m,
+                        Grid.DIFFICULTY_NONE);
+                resetLabels();
+                setContentPane(new JScrollPane(sudoku));
+                pack();
+                stopwatchLabel.start();
+            }
+            revalidate();
+            repaint();
+        } else {
+            cheating = false;
+            autoPossSlider.setValue(0);
+            autoFillSlider.setValue(0);
+            sudoku = new Sudoku(false, false, false, false,
+                    possAsNumStyle.isSelected(), false, -1, 3, m, difficulty);
             resetLabels();
             setContentPane(new JScrollPane(sudoku));
             pack();
             stopwatchLabel.start();
         }
-        revalidate();
-        repaint();
     }
     
     private void actionSolve() {
@@ -391,6 +573,7 @@ public class MainFrame extends JFrame {
         if (choice != JOptionPane.YES_OPTION) {
             return;
         }
+        cheating = true;
         
         Status status = sudoku.solve();
         if (status == Status.SOLVED) {
@@ -432,6 +615,31 @@ public class MainFrame extends JFrame {
         }
     }
     
+    private void actionShowScores(int difficulty) {
+        String msg = "<html>";
+        msg += "<font size=4>";
+        msg += "Best results - ";
+        switch (difficulty) {
+            case Grid.DIFFICULTY_EASY: msg += "easy"; break;
+            case Grid.DIFFICULTY_MEDIUM: msg += "medium"; break;
+            case Grid.DIFFICULTY_HARD: msg += "hard"; break;
+            case Grid.DIFFICULTY_EXTREME: msg += "extreme"; break;
+        }
+        msg += " difficulty:";
+        msg += "</font>";
+        msg += "<table>";
+        for (int i = 0; i < 10; i++) {
+            msg += "<tr><td>";
+            msg += Scores.getName(difficulty, i);
+            msg += "</td><td>";
+            msg += StopwatchLabel.convertTime(Scores.getTime(difficulty, i));
+            msg += "</td></tr>";
+        }
+        msg += "</table></html>";
+        JOptionPane.showMessageDialog(MainFrame.this, msg,
+                MainFrame.this.getTitle(), JOptionPane.PLAIN_MESSAGE);
+    }
+    
     private void actionAbout() {
         String msg = "<html><table>"
                 + "<tr><td>Version:<td></td>" + Main.VERSION + "</td></tr>"
@@ -468,5 +676,29 @@ public class MainFrame extends JFrame {
         
         JOptionPane.showMessageDialog(MainFrame.this, msg,
                 MainFrame.this.getTitle(), JOptionPane.PLAIN_MESSAGE);
+    }
+    
+    /**
+     * Returns true if the user is already cheating or is playing custom
+     * game. Otherwise ask for cheating confirmation and returns either true
+     * or false, depending on user's choice.
+     */
+    private boolean cheatingConfirmed() {
+        if (!cheating && sudoku.getDifficulty() != Grid.DIFFICULTY_NONE) {
+            if (JOptionPane.YES_OPTION ==
+                    JOptionPane.showConfirmDialog(MainFrame.this,
+                    "<html>Do you really want to cheat?<br>"
+                    + "Your score will not be saved.</html>",
+                    MainFrame.this.getTitle(),
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.PLAIN_MESSAGE)) {
+                cheating = true;
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return true;
+        }
     }
 }

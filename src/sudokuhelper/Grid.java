@@ -9,6 +9,11 @@ import java.util.Stack;
  */
 public class Grid {
     public static final int TIMEOUT = 2000;
+    public static final int DIFFICULTY_NONE = 0;
+    public static final int DIFFICULTY_EASY = 1;
+    public static final int DIFFICULTY_MEDIUM = 2;
+    public static final int DIFFICULTY_HARD = 3;
+    public static final int DIFFICULTY_EXTREME = 4;
     
     private final Cell[][] grid;
     private final int size;
@@ -20,6 +25,8 @@ public class Grid {
     boolean autoFillAdvanced = true;
     
     private boolean initialPoss;
+    
+    private int difficulty = DIFFICULTY_NONE;
 
     private Grid(int size) {
         grid = new Cell[size*size][size*size];
@@ -51,10 +58,10 @@ public class Grid {
             Grid g = new Grid(autoPossBasic, autoPossAdvanced, autoFillBasic,
                     autoFillAdvanced, initialPoss, size);
 
-            int i = initNumbers;
+            int numbers = initNumbers;
             Random rand = new Random();
             int x, y, number;
-            while (i > 0) {
+            while (numbers > 0) {
                 x = rand.nextInt(size*size);
                 y = rand.nextInt(size*size);
                 number = rand.nextInt(size*size);
@@ -62,7 +69,7 @@ public class Grid {
                     g.grid[x][y].setEditable(false);
                     g.grid[x][y].fill(number);
                     g.grid[x][y].poss().clear();
-                    i--;
+                    numbers--;
                 }
             }
             
@@ -75,7 +82,7 @@ public class Grid {
                 continue;
             }
             
-            if (autoPossBasic) {
+            if (initialPoss) {
                 for (Cell cell : g.all()) {
                     for (Cell neighbour : g.neighbours(cell.row, cell.column, false)) {
                         if (neighbour.value() != 0) {
@@ -87,6 +94,134 @@ public class Grid {
 
             return g;
         }
+    }
+    
+    public static Grid uniqueGen(boolean autoPossBasic, boolean autoPossAdvanced,
+            boolean autoFillBasic, boolean autoFillAdvanced,
+            boolean initialPoss, int difficulty, int size) {
+        
+        Grid g;
+        Random rand = new Random();
+        int x, y, number;
+        
+        //generate filled Sudoku
+        while (true) {
+            g = new Grid(true, true, true, true, initialPoss, size);
+            
+            int i = size * size;
+            while (i > 0) {
+                x = rand.nextInt(size*size);
+                y = rand.nextInt(size*size);
+                number = rand.nextInt(size*size);
+                if ((g.grid[x][y].value() == 0) && (null == g.isAllowed(x, y, number))) {
+                    g.grid[x][y].fill(number);
+                    i--;
+                }
+            }
+            
+            Object solved = g.solvedCopy();
+            if (solved.getClass() == Grid.class) {
+                g = (Grid) solved;
+                break;
+            } else if (solved == Status.UNKNOWN) {
+                Debug.println("generated unknown puzzle", Debug.GENERATION);
+            } else if (solved == Status.UNSOLVABLE) {
+                Debug.println("generated invalid puzzle", Debug.GENERATION);
+            }
+        }
+        
+        //set difficulty options
+        g.difficulty = difficulty;
+        boolean _autoPossBasic = false;
+        boolean _autoPossAdvanced = false;
+        boolean _autoFillBasic = false;
+        boolean _autoFillAdvanced = false;
+        
+        switch (difficulty) {
+            case DIFFICULTY_EXTREME:
+            case DIFFICULTY_HARD: _autoPossAdvanced = true;
+            case DIFFICULTY_MEDIUM: _autoFillAdvanced = true;
+            case DIFFICULTY_EASY: _autoPossBasic = true; _autoFillBasic = true;
+        }
+        
+        g.autoPossBasic = _autoPossBasic;
+        g.autoPossAdvanced = _autoPossAdvanced;
+        g.autoFillBasic = _autoFillBasic;
+        g.autoFillAdvanced = _autoFillAdvanced;
+        
+        int numbers = 0;
+        switch (difficulty) {
+            case DIFFICULTY_EXTREME:
+            case DIFFICULTY_HARD: numbers = size*size*size*size - 25; break;
+            case DIFFICULTY_MEDIUM: numbers = size*size*size*size - 30; break;
+            case DIFFICULTY_EASY: numbers = size*size*size*size - 35; break;
+        }
+        
+        //set poss for filler
+        for (Cell cell : g.all()) {
+            cell.poss().addAll();
+        }
+
+        //remove some number and generate unique sudoku
+        int i = size*size*size*size;
+        while (i > 0) {
+            x = rand.nextInt(size*size);
+            y = rand.nextInt(size*size);
+            number = g.grid[x][y].value();
+            if (number != 0) {
+                g.clear(x, y, true);
+                g.history.push(Change.marker());
+                if (g.fillAll().isAllFilled()) {          
+                    g.undo();
+                    i = size*size*size*size;
+                    if (--numbers == 0) {
+                        break;
+                    }
+                } else {
+                    g.undo();
+                    g.undo();
+                }
+            }
+            i--;
+        }
+        Debug.println("Not removed: " + numbers, Debug.GENERATION);
+        
+        //set remaining values uneditable and clear their possibilities
+        for (Cell cell : g.all()) {
+            if (cell.value() != 0) {
+                cell.poss().clear();
+                cell.setEditable(false);
+            }
+        }
+        
+        //fill possibilities - user setting
+        if (initialPoss) {
+            for (Cell cell : g.all()) {
+                cell.poss().addAll();
+                for (Cell neighbour : g.neighbours(cell.row, cell.column, false)) {
+                    if (neighbour.value() != 0) {
+                        cell.poss().remove(neighbour.value());
+                    }
+                }
+            }
+        } else {
+            for (Cell cell : g.all()) {
+                cell.poss().clear();
+            }
+        }
+        
+        //set strength of user's algorithms
+        g.autoPossBasic = autoPossBasic;
+        g.autoPossAdvanced = autoPossAdvanced;
+        g.autoFillBasic = autoFillBasic;
+        g.autoFillAdvanced = autoFillAdvanced;
+        g.history.clear();
+        
+        return g;
+    }
+    
+    public int getDifficulty() {
+        return difficulty;
     }
     
     /**
@@ -195,12 +330,31 @@ public class Grid {
         clear(row, column, true);
     }
     
-    private void clear(int row, int column, boolean user) {
-        if (grid[row][column].value() == 0) {
-            return;
+    private Grid clear(int row, int column, boolean user) {
+        if (grid[row][column].value() != 0) {
+            int number = grid[row][column].clear();
+            history.add(new Change(row, column, number, Change.NORMAL, user));
         }
-        int number = grid[row][column].clear();
-        history.add(new Change(row, column, number, Change.NORMAL, user));
+        return this;
+    }
+    
+    public Cell hint() {
+        if (isAllFilled()) {
+            return null;
+        }
+        Random rand = new Random();
+        int x, y;
+        do {
+            x = rand.nextInt(size*size);
+            y = rand.nextInt(size*size);
+        } while (grid[x][y].value() != 0);
+        
+        Object solved = solvedCopy();
+        if (solved.getClass() != Grid.class) {
+            return null;
+        } else {
+            return ((Grid) solved).grid[x][y].copy();
+        }
     }
     
     /**
@@ -267,7 +421,7 @@ public class Grid {
         fillAll();
     }
     
-    private void fillAll() {
+    private Grid fillAll() {
         Debug.println("call: fillAll()", Debug.METHOD_CALL);
         if (autoPossBasic) {
             for (Cell cell : all()) {
@@ -357,7 +511,7 @@ public class Grid {
                 if (cell.poss().size() == 1) {
                     if (isAllowed(cell, cell.poss().getFirst())) {
                         fill(cell.row, cell.column, cell.poss().getFirst(), false);
-                        return;
+                        return this;
                     }
                 }
             }
@@ -380,7 +534,7 @@ public class Grid {
                     if (!possibleSomewhereElse) {
                         if (isAllowed(cell, cell.poss().getFirst())) {
                             fill(cell.row, cell.column, n, false);
-                            return;
+                            return this;
                         }
                     }
                     //columns
@@ -394,7 +548,7 @@ public class Grid {
                     if (!possibleSomewhereElse) {
                         if (isAllowed(cell, cell.poss().getFirst())) {
                             fill(cell.row, cell.column, n, false);
-                            return;
+                            return this;
                         }
                     }
                     //squares
@@ -408,26 +562,28 @@ public class Grid {
                     if (!possibleSomewhereElse) {
                         if (isAllowed(cell, cell.poss().getFirst())) {
                             fill(cell.row, cell.column, n, false);
-                            return;
+                            return this;
                         }
                     }
                 }
             }
         }
+        
+        return this;
     }
 
     @Override
     public String toString() {
         String r = "";
         
-        for (int i = 0; i < size*size; i++) {
-            for (int j = 0; j < size*size; j++) {
-                if (grid[i][j].value() != 0) {
-                    r += "object.grid[" + i + "][" + j + "].fill("
-                            + grid[i][j].value() + ");\n";
-                }
-            }
-        }
+//        for (int i = 0; i < size*size; i++) {
+//            for (int j = 0; j < size*size; j++) {
+//                if (grid[i][j].value() != 0) {
+//                    r += "object.grid[" + i + "][" + j + "].fill("
+//                            + grid[i][j].value() + ");\n";
+//                }
+//            }
+//        }
         
         for (int i = 0; i < size*size; i++) {
             for (int j = 0; j < size*size; j++) {
@@ -557,6 +713,10 @@ public class Grid {
                     }
                 }
             }
+        }
+        
+        if (emptyCell == null) { //if all filled
+            return this;
         }
         
         for (int n : emptyCell.poss()) {
