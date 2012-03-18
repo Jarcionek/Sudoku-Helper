@@ -244,7 +244,7 @@ public class MainFrame extends JFrame {
         });
         
         pack();
-//        setResizable(false);
+        setMinimumSize(new Dimension(300, 225));
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         
         //center
@@ -385,6 +385,8 @@ public class MainFrame extends JFrame {
                     sudoku.setAutoFillAdvanced(autoFillSlider.getValue() >= 2);
                 } else {
                     autoFillSlider.setValue(0);
+                    sudoku.setAutoFillBasic(false);
+                    sudoku.setAutoFillAdvanced(false);
                 }
             }
         });
@@ -404,7 +406,7 @@ public class MainFrame extends JFrame {
         autoPossSlider.setPaintLabels(true);
         autoPossSlider.setLabelTable(new Hashtable() {
             {
-                put(0, new JMenu("Off"));
+                put(0, new JLabel("Off"));
                 put(1, new JLabel("Basic"));
                 put(2, new JLabel("Advanced"));
             }
@@ -419,6 +421,8 @@ public class MainFrame extends JFrame {
                     sudoku.setAutoPossAdvanced(autoPossSlider.getValue() >= 2);
                 } else {
                     autoPossSlider.setValue(0);
+                    sudoku.setAutoPossBasic(false);
+                    sudoku.setAutoPossAdvanced(false);
                 }
             }
         });
