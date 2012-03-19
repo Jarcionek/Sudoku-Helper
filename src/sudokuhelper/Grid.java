@@ -322,6 +322,17 @@ public class Grid {
         return grid[row][column].poss().contains(number);
     }
     
+    public void possClear(int row, int column) {
+        if (grid[row][column].poss().isEmpty()) {
+            return;
+        }
+        history.add(Change.marker());
+        for (int n : grid[row][column].poss()) {
+            history.add(new Change(row, column, n, Change.POSS_ADD, false));
+            grid[row][column].poss().remove(n);
+        }
+    }
+    
     public boolean isEditable(int row, int column) {
         return grid[row][column].isEditable();
     }

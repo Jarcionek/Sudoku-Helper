@@ -5,16 +5,12 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.GridLayout;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
@@ -179,6 +175,20 @@ public class Sudoku extends JPanel {
         } else {
             grid.possAdd(selectedRow, selectedColumn, number);
         }
+        if (grid.value(selectedRow, selectedColumn) == 0) {
+            label[selectedRow][selectedColumn].setText(
+                    getPossibilities(grid.poss(selectedRow, selectedColumn)));
+        }
+    }
+    
+    public void possClear() {
+        if (!grid.isEditable(selectedRow, selectedColumn)) {
+            Toolkit.getDefaultToolkit().beep();
+            return;
+        }
+       
+        grid.possClear(selectedRow, selectedColumn);
+        
         if (grid.value(selectedRow, selectedColumn) == 0) {
             label[selectedRow][selectedColumn].setText(
                     getPossibilities(grid.poss(selectedRow, selectedColumn)));

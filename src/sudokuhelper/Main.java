@@ -7,8 +7,8 @@ import java.io.File;
  */
 public class Main {
     public static final String NAME = "Sudoku Helper";
-    public static final String VERSION = "1.41";
-    public static final String DATE = "18/03/2012";
+    public static final String VERSION = "1.45";
+    public static final String DATE = "19/03/2012";
     public static final File DIRECTORY = new File(
                                           System.getProperty("user.dir"), NAME);
     

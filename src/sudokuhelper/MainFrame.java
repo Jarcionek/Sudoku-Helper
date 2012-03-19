@@ -69,6 +69,15 @@ public class MainFrame extends JFrame {
             public void exec(MouseEvent e) {
                 MainFrame.this.requestFocusInWindow();
                 resetLabels();
+                
+                if (Debug.IS_ON && e.getButton() == MouseEvent.BUTTON3) {
+                    sudoku.setAutoFillAdvanced(true);
+                    sudoku.setAutoFillBasic(true);
+                    sudoku.setAutoPossBasic(true);
+                    sudoku.setAutoPossAdvanced(true);
+                    sudoku.fillSuggestions();
+                    sudoku.hint();
+                }
             }
         };
 
@@ -128,7 +137,11 @@ public class MainFrame extends JFrame {
                 } else if (k == KeyEvent.VK_BACK_SPACE
                         || k == KeyEvent.VK_DELETE
                         || k == KeyEvent.VK_E) {
-                    sudoku.clearSelected();
+                    if (possMode) {
+                        sudoku.possClear();
+                    } else {
+                        sudoku.clearSelected();
+                    }
                 } else if (k == KeyEvent.VK_SPACE) {
                     sudoku.setPossMode(possMode = !possMode);
                 } else if (k == KeyEvent.VK_R
@@ -538,6 +551,7 @@ public class MainFrame extends JFrame {
                     JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
             if (choice == JOptionPane.OK_OPTION) {
                 cheating = true;
+                possMode = false;
                 sudoku = new Sudoku(autoPossSlider.getValue() >= 1,
                         autoPossSlider.getValue() >= 2,
                         autoFillSlider.getValue() >= 1,
@@ -556,6 +570,7 @@ public class MainFrame extends JFrame {
             repaint();
         } else {
             cheating = false;
+            possMode = false;
             autoPossSlider.setValue(0);
             autoFillSlider.setValue(0);
             sudoku = new Sudoku(false, false, false, false,

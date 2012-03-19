@@ -101,18 +101,24 @@ public class Scores implements Serializable {
         }
         
         int place = times.length - 1;
-        while (place > 0) {
+        while (true) {
+            if (place < times.length - 1) {
+                times[place + 1] = times[place];
+                names[place + 1] = names[place];
+            }
             if (times[place] < time) {
                 place++;
                 break;
             }
-            names[place] = names[place - 1];
-            times[place] = times[place - 1];
             place--;
+            if (place == -1) {
+                place = 0;
+                break;
+            }
         }
-        
-        names[place] = name;
         times[place] = time;
+        names[place] = name;
+        
         save();
     }
     
